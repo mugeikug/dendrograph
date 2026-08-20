@@ -1,0 +1,248 @@
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  margin: 0;
+  /* Guard against any descendant's intrinsic width forcing a page-level horizontal
+     scrollbar in the narrow task pane -- content should wrap/shrink, not overflow. */
+  overflow-x: hidden;
+}
+
+body {
+  font-family: system-ui, "Yu Gothic", sans-serif;
+  background: #f4f4f6;
+}
+
+#app-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* The popout editor dialog is opened specifically to get more room than the task
+   pane allows, so let it use the full window width instead of the normal cap. */
+#app-shell.dialog-mode {
+  max-width: none;
+  width: 100%;
+}
+
+header h1 {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+}
+
+header p {
+  margin: 0 0 20px;
+  color: #555;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Word task panes are narrow, so panels stack by default; widen out to a fixed
+   sidebar + fill-the-rest grid only when there's room (standalone tab, popout
+   dialog). Grid's `1fr` track reliably consumes all remaining width, which plain
+   flex-grow was not doing reliably here. */
+@media (min-width: 700px) {
+  main {
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+#editor-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+#editor-pane label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+#library-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+#library-toolbar button {
+  font-size: 0.8rem;
+  padding: 5px 9px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+#entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+#entry-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#entry-list li.active .entry-select {
+  background: #e8f0fe;
+  border-color: #7ba7f7;
+  font-weight: 600;
+}
+
+.entry-select {
+  flex: 1;
+  text-align: left;
+  font-size: 0.85rem;
+  padding: 5px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-delete {
+  font-size: 0.85rem;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  color: #b3261e;
+  cursor: pointer;
+}
+
+.entry-add {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 5px 8px;
+  border: 1px dashed #bbb;
+  border-radius: 6px;
+  background: white;
+  color: #555;
+  cursor: pointer;
+}
+
+#entry-name {
+  font-size: 0.9rem;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+#editor-pane textarea {
+  width: 100%;
+  min-height: 200px;
+  box-sizing: border-box;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.95rem;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.error {
+  color: #b3261e;
+  background: #fdecea;
+  border: 1px solid #f5c6c3;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+#preview-pane {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#toolbar button {
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+#toolbar button:disabled {
+  color: #999;
+  cursor: not-allowed;
+}
+
+.status {
+  color: #1b6e2c;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.zoom-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.zoom-toolbar button {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+.zoom-level {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.zoom-viewport {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: grab;
+  background: #fafafa;
+}
+
+.zoom-viewport:active {
+  cursor: grabbing;
+}
