@@ -85,4 +85,32 @@ describe('layoutTree', () => {
       expect(n.x + n.width / 2).toBeLessThanOrEqual(width + 0.001)
     }
   })
+
+  describe('math segments ($...$)', () => {
+    it('does not change row spacing for a tree with no math segments (exact backward compatibility)', () => {
+      const { root } = layoutTree(parseTree('[S [NP the] [VP runs]]'), opts)
+      expect(root.children[0].y).toBe(opts.rowHeight)
+      expect(root.children[0].children[0].y).toBe(opts.rowHeight * 2)
+    })
+
+    it('pushes the next depth down to fit a node whose math label is taller than one text line', () => {
+      const matrixLabel = String.raw`$\begin{bmatrix} \text{CASE} & \text{nom} \\ \text{PERS} & 3 \end{bmatrix}$`
+      const { root } = layoutTree(parseTree(`[S [${matrixLabel} x] [VP runs]]`), opts)
+      const [tallNode, plainNode] = root.children
+      // Both are at depth 1, so they still share a row...
+      expect(tallNode.y).toBe(plainNode.y)
+      // ...but the row below (their children) must be pushed down well past the default
+      // rowHeight to clear the tall matrix, not sit at the usual 2*rowHeight.
+      const tallChild = tallNode.children[0]
+      expect(tallChild.y).toBeGreaterThan(opts.rowHeight * 2)
+    })
+
+    it('widens a node to fit a math segment wider than the default min width', () => {
+      const { root } = layoutTree(
+        parseTree(String.raw`[$\begin{bmatrix} \text{CASE} & \text{nominative} \end{bmatrix}$]`),
+        opts,
+      )
+      expect(root.width).toBeGreaterThan(opts.minNodeWidth * 3)
+    })
+  })
 })

@@ -12,7 +12,9 @@ export class ParseError extends Error {
 
 const BRACKET_OR_WS = /[\s[\]]/
 
-/** Inline sub/superscript syntax: `_{...}` / `^{...}`, or `_x` / `^x` for a single token. */
+/** Inline sub/superscript syntax: `_{...}` / `^{...}`, or `_x` / `^x` for a single token.
+ *  Applied only to the plain-text portions of a label -- math segments (`$...$`) are
+ *  extracted separately, upstream, in `parseLabelSegments`. */
 function parseInlineText(raw: string): LabelSegment[] {
   const segments: LabelSegment[] = []
   const re = /([_^])(\{[^}]*\}|\S+)/g
@@ -34,6 +36,64 @@ function parseInlineText(raw: string): LabelSegment[] {
   return segments
 }
 
+/** Splits `raw` into plain-text chunks and `$...$` (inline) / `$$...$$` (display) math
+ *  chunks, scanning left to right and escape-aware (`\$` is a literal "$", never a
+ *  delimiter -- unescaped to "$" in the plain-text result). Each plain-text chunk is
+ *  then run through the existing `_{}/^{}` scanner; each math chunk becomes a single
+ *  `script: 'math'` segment holding the raw (unmodified) TeX source between the
+ *  delimiters. An unterminated `$`/`$$` is treated as literal plain text rather than
+ *  erroring, so a stray dollar sign doesn't break parsing. */
+function parseLabelSegments(raw: string): LabelSegment[] {
+  const segments: LabelSegment[] = []
+  let plainStart = 0
+  let i = 0
+
+  const flushPlain = (end: number) => {
+    if (end <= plainStart) return
+    const chunk = raw.slice(plainStart, end).replace(/\\\$/g, '$')
+    segments.push(...parseInlineText(chunk))
+  }
+
+  while (i < raw.length) {
+    const ch = raw[i]
+    if (ch === '\\') {
+      i += 2
+      continue
+    }
+    if (ch === '$') {
+      const display = raw[i + 1] === '$'
+      const delim = display ? '$$' : '$'
+      const contentStart = i + delim.length
+      let j = contentStart
+      let closeAt = -1
+      while (j < raw.length) {
+        if (raw[j] === '\\') {
+          j += 2
+          continue
+        }
+        if (raw.startsWith(delim, j)) {
+          closeAt = j
+          break
+        }
+        j++
+      }
+      if (closeAt === -1) {
+        // Unterminated -- treat the "$" as literal and keep scanning from just past it.
+        i++
+        continue
+      }
+      flushPlain(i)
+      segments.push({ text: raw.slice(contentStart, closeAt), script: 'math', display })
+      i = closeAt + delim.length
+      plainStart = i
+      continue
+    }
+    i++
+  }
+  flushPlain(raw.length)
+  return segments
+}
+
 interface ParserState {
   input: string
   pos: number
@@ -45,12 +105,22 @@ function skipWs(s: ParserState) {
 
 /** Reads one label/word token. A "{...}" group -- wherever it appears in the token,
  *  brace-depth aware -- is read atomically, so internal spaces don't end the token
- *  early (e.g. `t~{agentive subject}` stays one token). Returns the raw text with
- *  braces intact; unwrapping happens later in `parseLabelToken`. */
+ *  early (e.g. `t~{agentive subject}` stays one token). A "$...$"/"$$...$$" math span is
+ *  likewise read atomically and *without* regard to its own internal whitespace/braces/
+ *  brackets (real TeX routinely has spaces and "[", "]" at top level, e.g.
+ *  `\begin{bmatrix} \text{CASE} & \text{nom} \\ ... \end{bmatrix}`), so the token isn't
+ *  cut short partway through a formula. Returns the raw text with braces/delimiters
+ *  intact; unwrapping and math-segment extraction happen later. */
 function readToken(s: ParserState): string {
   const start = s.pos
   while (s.pos < s.input.length) {
     const ch = s.input[s.pos]
+    if (ch === '\\') {
+      // An escaped character (e.g. "\$", "\~") is never a delimiter -- consume it and
+      // whatever it escapes as one atomic unit, before any of the checks below apply.
+      s.pos += 2
+      continue
+    }
     if (ch === '{') {
       const braceStart = s.pos
       s.pos++
@@ -62,6 +132,31 @@ function readToken(s: ParserState): string {
       }
       if (depth > 0) {
         throw new ParseError('"{" に対応する "}" がありません', braceStart)
+      }
+      continue
+    }
+    if (ch === '$') {
+      const dollarStart = s.pos
+      const delim = s.input[s.pos + 1] === '$' ? '$$' : '$'
+      s.pos += delim.length
+      let closed = false
+      while (s.pos < s.input.length) {
+        if (s.input[s.pos] === '\\') {
+          s.pos += 2
+          continue
+        }
+        if (s.input.startsWith(delim, s.pos)) {
+          s.pos += delim.length
+          closed = true
+          break
+        }
+        s.pos++
+      }
+      if (!closed) {
+        // Unterminated -- back off to just past this one "$" and keep reading normally
+        // (matching `parseLabelSegments`'s fallback: a stray "$" is literal text, not
+        // an error), so the token still ends correctly at the next whitespace/bracket.
+        s.pos = dollarStart + 1
       }
       continue
     }
@@ -153,7 +248,7 @@ function parseNode(s: ParserState, path: string): TreeNode {
 
   const rawLabel = hasLeadingSpace ? '' : readToken(s)
   const { rest: labelText, isTriangle, arrowTag } = parseLabelToken(rawLabel, true)
-  const label = parseInlineText(labelText)
+  const label = parseLabelSegments(labelText)
   skipWs(s)
 
   if (isTriangle) {
@@ -181,7 +276,7 @@ function parseNode(s: ParserState, path: string): TreeNode {
       label,
       children: [],
       isTriangle: true,
-      triangleYield: yieldRaw.length > 0 ? parseInlineText(yieldRaw) : undefined,
+      triangleYield: yieldRaw.length > 0 ? parseLabelSegments(yieldRaw) : undefined,
       arrowTag,
     }
   }
@@ -207,7 +302,7 @@ function parseNode(s: ParserState, path: string): TreeNode {
       const { rest: wordText, arrowTag: wordArrowTag } = parseLabelToken(word, false)
       children.push({
         path: `${path}-${children.length}`,
-        label: parseInlineText(wordText),
+        label: parseLabelSegments(wordText),
         children: [],
         isTriangle: false,
         arrowTag: wordArrowTag,

@@ -13,6 +13,10 @@ function segmentsToLatex(segments: LabelSegment[] | undefined): string {
   if (!segments) return ''
   return segments
     .map((seg) => {
+      // A math segment's `text` is already raw TeX math source (from Dendrograph's own
+      // `$...$`/`$$...$$` notation) -- passed through completely unescaped, re-wrapped
+      // in the same delimiters, so the user's own LaTeX compiler typesets it for real.
+      if (seg.script === 'math') return seg.display ? `$$${seg.text}$$` : `$${seg.text}$`
       const text = escapeForestText(seg.text)
       if (seg.script === 'sub') return `$_{\\text{${text}}}$`
       if (seg.script === 'sup') return `$^{\\text{${text}}}$`

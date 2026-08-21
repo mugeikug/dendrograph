@@ -1,7 +1,8 @@
 import { forwardRef, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { LabelSegment } from '../core/treeModel'
-import type { LayoutNode, LayoutOptions, LayoutResult } from '../core/layout'
+import { measureLabelHeight, measureSegmentWidth, type LayoutNode, type LayoutOptions, type LayoutResult } from '../core/layout'
+import { renderMathToSvg } from '../core/mathRender'
 import type { MovementArrow } from '../core/movement'
 import {
   arrowAnchor,
@@ -31,29 +32,77 @@ interface TreeCanvasProps {
   padding?: number
 }
 
+const FONT_FAMILY = '"Times New Roman", "Yu Mincho", serif'
+
+/** A label with no math segment renders exactly as before: one `<text>` with `<tspan>`
+ *  children, centered via `textAnchor="middle"`. A label containing a math segment
+ *  can't use that approach (a `$...$` segment is an embedded SVG fragment, not text
+ *  content a `<tspan>` can hold), so it instead lays every segment out manually with a
+ *  left-to-right cursor -- widths measured the same way `layout.ts` measured them, so
+ *  the whole row centers on the same total width the tree actually reserved. Math
+ *  segments are top-anchored at this node's own topY (not baseline-aligned to
+ *  neighboring plain text), a deliberate simplification: getting a multi-row formula's
+ *  baseline to line up with a text baseline isn't worth the complexity for what's
+ *  normally a label that's entirely math anyway. */
 function LabelText({
   segments,
   x,
   y,
   fontSize,
+  opts,
 }: {
   segments: LabelSegment[]
   x: number
   y: number
   fontSize: number
+  opts: LayoutOptions
 }) {
+  const hasMath = segments.some((s) => s.script === 'math')
+  if (!hasMath) {
+    return (
+      <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fontFamily={FONT_FAMILY}>
+        {segments.map((seg, i) => {
+          if (seg.script === 'normal') return <tspan key={i}>{seg.text}</tspan>
+          const dy = seg.script === 'sub' ? fontSize * 0.28 : -fontSize * 0.32
+          return (
+            <tspan key={i} dy={dy} fontSize={fontSize * 0.68}>
+              {seg.text}
+            </tspan>
+          )
+        })}
+      </text>
+    )
+  }
+
+  const topY = y - fontSize
+  const widths = segments.map((seg) => measureSegmentWidth(seg, opts))
+  const totalWidth = widths.reduce((a, b) => a + b, 0)
+  let cursorX = x - totalWidth / 2
+
   return (
-    <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fontFamily='"Times New Roman", "Yu Mincho", serif'>
+    <g>
       {segments.map((seg, i) => {
-        if (seg.script === 'normal') return <tspan key={i}>{seg.text}</tspan>
-        const dy = seg.script === 'sub' ? fontSize * 0.28 : -fontSize * 0.32
+        const segX = cursorX
+        cursorX += widths[i]
+        if (seg.script === 'math') {
+          const math = renderMathToSvg(seg.text, seg.display ?? false, fontSize)
+          return <g key={i} dangerouslySetInnerHTML={{ __html: math.svg }} transform={`translate(${segX}, ${topY})`} />
+        }
+        if (seg.script === 'normal') {
+          return (
+            <text key={i} x={segX} y={y} textAnchor="start" fontSize={fontSize} fontFamily={FONT_FAMILY}>
+              {seg.text}
+            </text>
+          )
+        }
+        const scriptY = seg.script === 'sub' ? y + fontSize * 0.28 : y - fontSize * 0.32
         return (
-          <tspan key={i} dy={dy} fontSize={fontSize * 0.68}>
+          <text key={i} x={segX} y={scriptY} textAnchor="start" fontSize={fontSize * 0.68} fontFamily={FONT_FAMILY}>
             {seg.text}
-          </tspan>
+          </text>
         )
       })}
-    </text>
+    </g>
   )
 }
 
@@ -103,8 +152,11 @@ function DraggableNode({
   }
 
   // Generous invisible hit area covering the label (and triangle body, if any).
+  const mathHeight = measureLabelHeight(n.node, opts)
   const hitTop = g.topY - 4
-  const hitBottom = n.node.isTriangle ? g.triangleBaseY + opts.fontSize + 4 : g.labelY + 6
+  const hitBottom = n.node.isTriangle
+    ? g.triangleBaseY + opts.fontSize + 4
+    : Math.max(g.labelY + 6, g.topY + mathHeight + 6)
   const hitWidth = Math.max(n.width + 16, 32)
 
   return (
@@ -125,7 +177,7 @@ function DraggableNode({
         height={hitBottom - hitTop}
         fill="transparent"
       />
-      {hasLabel && <LabelText segments={n.node.label} x={pos.x} y={g.labelY} fontSize={opts.fontSize} />}
+      {hasLabel && <LabelText segments={n.node.label} x={pos.x} y={g.labelY} fontSize={opts.fontSize} opts={opts} />}
       {n.node.isTriangle && (
         <>
           <polygon
@@ -135,7 +187,7 @@ function DraggableNode({
             strokeWidth={1.25}
           />
           {n.node.triangleYield && (
-            <LabelText segments={n.node.triangleYield} x={pos.x} y={g.yieldTextY} fontSize={opts.fontSize} />
+            <LabelText segments={n.node.triangleYield} x={pos.x} y={g.yieldTextY} fontSize={opts.fontSize} opts={opts} />
           )}
         </>
       )}
@@ -162,6 +214,12 @@ function TreeNodeSvg({
 }) {
   const pos = resolvePos(n, adjustments, scaleX, scaleY)
   const g = nodeGeometry(pos.y, opts, n.node.label.length > 0)
+  // A tall math label (e.g. a multi-row feature matrix) can reach past the label row's
+  // normal childEdgeY -- start the edge below it instead, or the line would cut through
+  // the formula. `layout.ts` already reserves extra room below this row for exactly
+  // this case, so pushing the edge start down here never collides with the child row.
+  const mathHeight = measureLabelHeight(n.node, opts)
+  const edgeStartY = mathHeight > 0 ? Math.max(g.childEdgeY, pos.y + mathHeight + opts.labelGap) : g.childEdgeY
 
   return (
     <g>
@@ -171,7 +229,7 @@ function TreeNodeSvg({
           <line
             key={child.node.path}
             x1={pos.x}
-            y1={g.childEdgeY}
+            y1={edgeStartY}
             x2={childPos.x}
             y2={nodeGeometry(childPos.y, opts).topY}
             stroke="black"

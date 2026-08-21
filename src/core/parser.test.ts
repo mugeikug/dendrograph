@@ -201,4 +201,69 @@ describe('parseTree', () => {
       expect(plainText(leaf.label)).toBe('Stop!')
     })
   })
+
+  describe('math segments ($...$)', () => {
+    it('extracts an inline $...$ span as a single math segment with the raw TeX source', () => {
+      const tree = parseTree('[$x^2$]')
+      expect(tree.label).toEqual([{ text: 'x^2', script: 'math', display: false }])
+    })
+
+    it('extracts a display $$...$$ span with display:true', () => {
+      const tree = parseTree('[$$x^2$$]')
+      expect(tree.label).toEqual([{ text: 'x^2', script: 'math', display: true }])
+    })
+
+    it('keeps a $...$ span containing top-level whitespace and [ ] as one atomic token', () => {
+      const tree = parseTree(String.raw`[$\begin{bmatrix} \text{CASE} & \text{nom} \end{bmatrix}$]`)
+      expect(tree.label).toEqual([
+        { text: String.raw`\begin{bmatrix} \text{CASE} & \text{nom} \end{bmatrix}`, script: 'math', display: false },
+      ])
+    })
+
+    it('mixes plain text and math segments in one label, preserving order', () => {
+      // Wrapped in {} so the spaces stay part of one label instead of splitting into
+      // separate sibling leaves (the existing multi-word-label convention).
+      const tree = parseTree('[{a $x$ b}]')
+      expect(tree.label).toEqual([
+        { text: 'a ', script: 'normal' },
+        { text: 'x', script: 'math', display: false },
+        { text: ' b', script: 'normal' },
+      ])
+    })
+
+    it('still applies _{}/^{} to the plain-text portions around a math segment', () => {
+      const tree = parseTree('[{NP_{1} $x$}]')
+      expect(tree.label).toEqual([
+        { text: 'NP', script: 'normal' },
+        { text: '1', script: 'sub' },
+        { text: ' ', script: 'normal' },
+        { text: 'x', script: 'math', display: false },
+      ])
+    })
+
+    it('unescapes \\$ to a literal "$" outside of math mode, without starting a math span', () => {
+      const tree = parseTree(String.raw`[VP \$5]`)
+      expect(plainText(tree.children[0].label)).toBe('$5')
+    })
+
+    it('treats an unterminated "$" as literal text rather than throwing', () => {
+      const tree = parseTree('[VP $5]')
+      expect(plainText(tree.children[0].label)).toBe('$5')
+    })
+
+    it('applies to bare leaf words, not just bracketed labels', () => {
+      const tree = parseTree('[VP $x$]')
+      const leaf = tree.children[0]
+      expect(leaf.label).toEqual([{ text: 'x', script: 'math', display: false }])
+    })
+
+    it('applies to triangle yield text', () => {
+      const tree = parseTree('[NP△ $x$ and $y$]')
+      expect(tree.triangleYield).toEqual([
+        { text: 'x', script: 'math', display: false },
+        { text: ' and ', script: 'normal' },
+        { text: 'y', script: 'math', display: false },
+      ])
+    })
+  })
 })

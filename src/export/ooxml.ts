@@ -1,5 +1,6 @@
 import type { LabelSegment } from '../core/treeModel'
-import type { LayoutNode, LayoutOptions, LayoutResult } from '../core/layout'
+import { measureLabelHeight, type LayoutNode, type LayoutOptions, type LayoutResult } from '../core/layout'
+import { renderMathToOmml } from '../core/mathRender'
 import type { MovementArrow } from '../core/movement'
 import {
   arrowAnchor,
@@ -36,6 +37,11 @@ function runsFromSegments(segments: LabelSegment[], fontSizePx: number): string 
   const smallHalfPt = Math.round(baseHalfPt * 0.68)
   return segments
     .map((seg) => {
+      // A native Word equation object -- not a text run at all. Verified against real
+      // Word insertion (including a multi-row feature matrix with an auto-growing
+      // bracket) that `<m:oMath>` renders correctly as a sibling of `<w:r>` runs inside
+      // a `w:txbxContent` paragraph; see the Phase 6 spike notes in the project plan.
+      if (seg.script === 'math') return renderMathToOmml(seg.text, seg.display ?? false)
       const rPr =
         seg.script === 'normal'
           ? `<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="${baseHalfPt}"/></w:rPr>`
@@ -171,6 +177,7 @@ function wrapPackage(groupName: string, widthEmu: number, heightEmu: number, sha
         xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
         xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
         xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+        xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
         xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
         <w:body>
           <w:p>
@@ -245,7 +252,13 @@ export function layoutToOoxml(
     // preview's baseline-only model, so the edge needs a bit more clearance here
     // than `labelGap` alone provides to avoid visually touching the label text.
     // An unlabeled node has no label to clear -- its edges meet exactly at childEdgeY.
-    const edgeStartY = hasLabel ? g.childEdgeY + layoutOptions.fontSize * 0.3 : g.childEdgeY
+    // A tall math label (e.g. a multi-row feature matrix) needs the edge pushed down
+    // further still, past the formula's own rendered height (mirrors the same fix in
+    // the SVG renderer; `layout.ts` already reserves the extra row space for this).
+    const mathHeight = measureLabelHeight(n.node, layoutOptions)
+    const edgeStartY = hasLabel
+      ? Math.max(g.childEdgeY + layoutOptions.fontSize * 0.3, mathHeight > 0 ? pos.y + mathHeight + layoutOptions.labelGap : 0)
+      : g.childEdgeY
 
     for (const child of n.children) {
       const childPos = resolvePos(child, adjustments, scaleX, scaleY)
@@ -254,6 +267,7 @@ export function layoutToOoxml(
     }
 
     if (hasLabel) {
+      const labelHeight = mathHeight > 0 ? mathHeight : layoutOptions.fontSize * 1.5
       shapes.push(
         textBoxShape(
           nextId++,
@@ -262,7 +276,7 @@ export function layoutToOoxml(
           emu(pos.x - n.width / 2),
           emu(g.topY),
           emuSize(n.width),
-          emuSize(layoutOptions.fontSize * 1.5),
+          emuSize(labelHeight),
           layoutOptions,
         ),
       )

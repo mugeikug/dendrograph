@@ -1,8 +1,12 @@
-export type ScriptStyle = 'normal' | 'sub' | 'sup'
+export type ScriptStyle = 'normal' | 'sub' | 'sup' | 'math'
 
 export interface LabelSegment {
+  /** For `script: 'math'`, this is raw (unescaped) TeX math source, not display text. */
   text: string
   script: ScriptStyle
+  /** Only meaningful for `script: 'math'`: `$$...$$` (display, centered/larger) vs
+   *  `$...$` (inline). */
+  display?: boolean
 }
 
 export interface TreeNode {

@@ -12,12 +12,12 @@
   <DefaultLocale>ja-JP</DefaultLocale>
   <DisplayName DefaultValue="Dendrograph" />
   <Description DefaultValue="ブラケット記法から統語論の樹形図を自動生成し、編集可能な図形としてWordに挿入します。" />
-  <IconUrl DefaultValue="https://localhost:3000/icons/icon-32.png" />
-  <HighResolutionIconUrl DefaultValue="https://localhost:3000/icons/icon-64.png" />
-  <SupportUrl DefaultValue="https://localhost:3000" />
+  <IconUrl DefaultValue="https://mugeikug.github.io/dendrograph/icons/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://mugeikug.github.io/dendrograph/icons/icon-64.png" />
+  <SupportUrl DefaultValue="https://mugeikug.github.io/dendrograph/" />
 
   <AppDomains>
-    <AppDomain>https://localhost:3000</AppDomain>
+    <AppDomain>https://mugeikug.github.io</AppDomain>
   </AppDomains>
 
   <Hosts>
@@ -25,7 +25,7 @@
   </Hosts>
 
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://localhost:3000/" />
+    <SourceLocation DefaultValue="https://mugeikug.github.io/dendrograph/" />
   </DefaultSettings>
 
   <Permissions>ReadWriteDocument</Permissions>
@@ -75,13 +75,13 @@
 
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="https://localhost:3000/icons/icon-16.png" />
-        <bt:Image id="Icon.32x32" DefaultValue="https://localhost:3000/icons/icon-32.png" />
-        <bt:Image id="Icon.80x80" DefaultValue="https://localhost:3000/icons/icon-80.png" />
+        <bt:Image id="Icon.16x16" DefaultValue="https://mugeikug.github.io/dendrograph/icons/icon-16.png" />
+        <bt:Image id="Icon.32x32" DefaultValue="https://mugeikug.github.io/dendrograph/icons/icon-32.png" />
+        <bt:Image id="Icon.80x80" DefaultValue="https://mugeikug.github.io/dendrograph/icons/icon-80.png" />
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/" />
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:3000" />
+        <bt:Url id="Taskpane.Url" DefaultValue="https://mugeikug.github.io/dendrograph/" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://mugeikug.github.io/dendrograph/" />
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Dendrograph" />

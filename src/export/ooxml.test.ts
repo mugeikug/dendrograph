@@ -139,4 +139,43 @@ describe('layoutToOoxml', () => {
       }
     })
   })
+
+  describe('math segments ($...$)', () => {
+    it('embeds a native <m:oMath> equation for a math-only label, declaring the math namespace', () => {
+      const tree = parseTree(String.raw`[$x^2$]`)
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {})
+      expect(xml).toContain('<m:oMath')
+      expect(xml).toContain('xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"')
+    })
+
+    it('rewrites a bracket-wrapped feature matrix into a stretchy <m:d> delimiter', () => {
+      const tree = parseTree(String.raw`[$\begin{bmatrix} \text{CASE} & \text{nom} \\ \text{PERS} & 3 \end{bmatrix}$]`)
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {})
+      expect(xml).toContain('<m:d>')
+      expect(xml).toContain('<m:m>') // the OMML matrix element
+    })
+
+    it('gives the label text box a taller height to fit a multi-row matrix', () => {
+      const plain = layoutToOoxml(layoutTree(parseTree('[NP the]'), opts), opts, {})
+      const math = layoutToOoxml(
+        layoutTree(parseTree(String.raw`[$\begin{bmatrix} \text{CASE} & \text{nom} \\ \text{PERS} & 3 \end{bmatrix}$]`), opts),
+        opts,
+        {},
+      )
+      const plainHeight = Number(plain.match(/<a:ext cx="\d+" cy="(\d+)"\/>\s*<\/a:xfrm>\s*<a:prstGeom prst="rect"/)![1])
+      const mathHeight = Number(math.match(/<a:ext cx="\d+" cy="(\d+)"\/>\s*<\/a:xfrm>\s*<a:prstGeom prst="rect"/)![1])
+      expect(mathHeight).toBeGreaterThan(plainHeight)
+    })
+
+    it('produces well-formed tags even with a math label present', () => {
+      const tree = parseTree(String.raw`[S [$\begin{bmatrix} \text{CASE} & \text{nom} \end{bmatrix}$ x] [VP runs]]`)
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {})
+      for (const tag of ['wps:wsp', 'm:oMath', 'm:d', 'm:m', 'm:mr', 'w:p']) {
+        expect(countOpenTags(xml, tag)).toBe(countOccurrences(xml, `</${tag}>`))
+      }
+    })
+  })
 })

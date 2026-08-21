@@ -43,4 +43,24 @@ describe('treeToForestCode', () => {
     expect(code).toContain('\\%')
     expect(code).toContain('\\&')
   })
+
+  describe('math segments ($...$)', () => {
+    it('passes an inline math segment through unescaped, re-wrapped in $...$', () => {
+      const code = treeToForestCode(parseTree('[$x^2$]'), { standalone: false })
+      expect(code).toContain('$x^2$')
+    })
+
+    it('passes a display math segment through unescaped, re-wrapped in $$...$$', () => {
+      const code = treeToForestCode(parseTree('[$$x^2$$]'), { standalone: false })
+      expect(code).toContain('$$x^2$$')
+    })
+
+    it('does not escape LaTeX-reserved characters inside math source (e.g. "&", "%")', () => {
+      const code = treeToForestCode(
+        parseTree(String.raw`[$\begin{bmatrix} \text{CASE} & \text{nom\%} \end{bmatrix}$]`),
+        { standalone: false },
+      )
+      expect(code).toContain(String.raw`$\begin{bmatrix} \text{CASE} & \text{nom\%} \end{bmatrix}$`)
+    })
+  })
 })
