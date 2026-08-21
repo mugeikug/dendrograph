@@ -59,6 +59,8 @@ const DIALOG_QUERY_FLAG = 'dendrographDialog'
 export interface EditorState {
   input: string
   adjustments: Record<string, { dx: number; dy: number }>
+  arrowAdjustments: Record<string, { dx: number; dy: number }>
+  aspectScale: { x: number; y: number }
 }
 
 export function isDialogWindow(): boolean {
@@ -94,7 +96,12 @@ export function openEditorDialog(state: EditorState, onApply: (state: EditorStat
       if (!('message' in args)) return
       const message = parseMessage(args.message)
       if (message?.type === 'apply') {
-        onApply({ input: message.input as string, adjustments: message.adjustments as EditorState['adjustments'] })
+        onApply({
+          input: message.input as string,
+          adjustments: message.adjustments as EditorState['adjustments'],
+          arrowAdjustments: (message.arrowAdjustments as EditorState['arrowAdjustments']) ?? {},
+          aspectScale: (message.aspectScale as EditorState['aspectScale']) ?? { x: 1, y: 1 },
+        })
         dialog.close()
       }
     })

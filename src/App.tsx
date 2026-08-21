@@ -3,7 +3,8 @@ import { ParseError, parseTree } from './core/parser'
 import { defaultLayoutOptions, layoutTree } from './core/layout'
 import { canvasMeasureText } from './core/textWidth'
 import { createEntry, LibraryParseError, type TreeLibrary } from './core/library'
-import { TreeCanvas, type Adjustments, type NodeAdjustment } from './render/TreeCanvas'
+import { detectMovementArrows } from './core/movement'
+import { TreeCanvas, canvasSize, type Adjustments, type ArrowAdjustments, type AspectScale, type NodeAdjustment } from './render/TreeCanvas'
 import { ZoomPanViewport } from './render/ZoomPanViewport'
 import { copyPngToClipboard, downloadPng, downloadSvg } from './export/imageExport'
 import { layoutToOoxml } from './export/ooxml'
@@ -28,6 +29,8 @@ function makeInitialState(): { library: TreeLibrary; activeId: string } {
     const initial = readInitialStateFromUrl()
     const entry = createEntry('編集中', initial?.input ?? SAMPLE)
     entry.adjustments = initial?.adjustments ?? {}
+    entry.arrowAdjustments = initial?.arrowAdjustments ?? {}
+    entry.aspectScale = initial?.aspectScale ?? { x: 1, y: 1 }
     return { library: { version: 1, entries: [entry] }, activeId: entry.id }
   }
   const entry = createEntry('サンプル', SAMPLE)
@@ -60,7 +63,17 @@ function App() {
     }
   }, [activeEntry.input])
 
-  const updateActiveEntry = (patch: Partial<{ name: string; input: string; adjustments: Adjustments }>) => {
+  const arrows = useMemo(() => (tree ? detectMovementArrows(tree) : []), [tree])
+
+  const updateActiveEntry = (
+    patch: Partial<{
+      name: string
+      input: string
+      adjustments: Adjustments
+      arrowAdjustments: ArrowAdjustments
+      aspectScale: AspectScale
+    }>,
+  ) => {
     setState((prev) => ({
       ...prev,
       library: {
@@ -81,7 +94,28 @@ function App() {
     updateActiveEntry({ adjustments: next })
   }
 
-  const handleResetAll = () => updateActiveEntry({ adjustments: {} })
+  const handleResetAll = () => updateActiveEntry({ adjustments: {}, arrowAdjustments: {} })
+
+  const handleAdjustArrow = (id: string, adjustment: NodeAdjustment) => {
+    updateActiveEntry({ arrowAdjustments: { ...activeEntry.arrowAdjustments, [id]: adjustment } })
+  }
+
+  const handleResetArrow = (id: string) => {
+    if (!(id in activeEntry.arrowAdjustments)) return
+    const next = { ...activeEntry.arrowAdjustments }
+    delete next[id]
+    updateActiveEntry({ arrowAdjustments: next })
+  }
+
+  // Aspect-ratio percentages are edited as text so the field can be blank/mid-edit;
+  // only a valid positive number is committed as a scale factor.
+  const handleAspectScaleChange = (axis: 'x' | 'y', percentText: string) => {
+    const percent = Number(percentText)
+    if (!Number.isFinite(percent) || percent <= 0) return
+    updateActiveEntry({ aspectScale: { ...activeEntry.aspectScale, [axis]: percent / 100 } })
+  }
+
+  const handleResetAspectScale = () => updateActiveEntry({ aspectScale: { x: 1, y: 1 } })
 
   const handleNewEntry = () => {
     const entry = createEntry(`新規${library.entries.length + 1}`, SAMPLE)
@@ -123,7 +157,10 @@ function App() {
     if (!layout) return
     setInsertStatus('挿入中...')
     try {
-      const ooxml = layoutToOoxml(layout, options, activeEntry.adjustments)
+      const ooxml = layoutToOoxml(layout, options, activeEntry.adjustments, arrows, activeEntry.arrowAdjustments, {
+        scaleX: activeEntry.aspectScale.x,
+        scaleY: activeEntry.aspectScale.y,
+      })
       await insertOoxmlIntoWord(ooxml)
       setInsertStatus('Wordに挿入しました。図形を選択して「グループ解除」すると個別に編集できます。')
     } catch (e) {
@@ -132,13 +169,31 @@ function App() {
   }
 
   const handleOpenEditor = () => {
-    openEditorDialog({ input: activeEntry.input, adjustments: activeEntry.adjustments }, (state) => {
-      updateActiveEntry({ input: state.input, adjustments: state.adjustments })
-    })
+    openEditorDialog(
+      {
+        input: activeEntry.input,
+        adjustments: activeEntry.adjustments,
+        arrowAdjustments: activeEntry.arrowAdjustments,
+        aspectScale: activeEntry.aspectScale,
+      },
+      (state) => {
+        updateActiveEntry({
+          input: state.input,
+          adjustments: state.adjustments,
+          arrowAdjustments: state.arrowAdjustments,
+          aspectScale: state.aspectScale,
+        })
+      },
+    )
   }
 
   const handleApplyFromDialog = () => {
-    applyAndCloseDialog({ input: activeEntry.input, adjustments: activeEntry.adjustments })
+    applyAndCloseDialog({
+      input: activeEntry.input,
+      adjustments: activeEntry.adjustments,
+      arrowAdjustments: activeEntry.arrowAdjustments,
+      aspectScale: activeEntry.aspectScale,
+    })
   }
 
   const handleSaveLibrary = async () => {
@@ -171,6 +226,10 @@ function App() {
       setLibraryStatus(`読み込みに失敗しました: ${message}`)
     }
   }
+
+  const { width: contentWidth, height: contentHeight } = layout
+    ? canvasSize(layout, arrows, options, activeEntry.adjustments, activeEntry.arrowAdjustments, activeEntry.aspectScale.x, activeEntry.aspectScale.y)
+    : { width: 0, height: 0 }
 
   return (
     <div id="app-shell" className={isDialog ? 'dialog-mode' : undefined}>
@@ -228,8 +287,44 @@ function App() {
           />
           {error && <p className="error">{error}</p>}
 
+          <div id="aspect-toolbar">
+            <label htmlFor="aspect-x">横</label>
+            <input
+              id="aspect-x"
+              type="number"
+              min={10}
+              max={400}
+              step={5}
+              value={Math.round(activeEntry.aspectScale.x * 100)}
+              onChange={(e) => handleAspectScaleChange('x', e.target.value)}
+            />
+            <span>%</span>
+            <label htmlFor="aspect-y">縦</label>
+            <input
+              id="aspect-y"
+              type="number"
+              min={10}
+              max={400}
+              step={5}
+              value={Math.round(activeEntry.aspectScale.y * 100)}
+              onChange={(e) => handleAspectScaleChange('y', e.target.value)}
+            />
+            <span>%</span>
+            <button
+              type="button"
+              onClick={handleResetAspectScale}
+              disabled={activeEntry.aspectScale.x === 1 && activeEntry.aspectScale.y === 1}
+            >
+              100%に戻す
+            </button>
+          </div>
+
           <div id="toolbar">
-            <button type="button" onClick={handleResetAll} disabled={Object.keys(activeEntry.adjustments).length === 0}>
+            <button
+              type="button"
+              onClick={handleResetAll}
+              disabled={Object.keys(activeEntry.adjustments).length === 0 && Object.keys(activeEntry.arrowAdjustments).length === 0}
+            >
               位置をすべてリセット
             </button>
             <button type="button" onClick={() => svgRef.current && downloadSvg(svgRef.current)} disabled={!layout}>
@@ -268,7 +363,7 @@ function App() {
         </section>
         <section id="preview-pane">
           {layout && (
-            <ZoomPanViewport contentWidth={layout.width + 48} contentHeight={layout.height + 48} height={isDialog ? '80vh' : 340}>
+            <ZoomPanViewport contentWidth={contentWidth} contentHeight={contentHeight} height={isDialog ? '80vh' : 340}>
               <TreeCanvas
                 ref={svgRef}
                 layout={layout}
@@ -276,6 +371,12 @@ function App() {
                 adjustments={activeEntry.adjustments}
                 onAdjustNode={handleAdjustNode}
                 onResetNode={handleResetNode}
+                arrows={arrows}
+                arrowAdjustments={activeEntry.arrowAdjustments}
+                onAdjustArrow={handleAdjustArrow}
+                onResetArrow={handleResetArrow}
+                scaleX={activeEntry.aspectScale.x}
+                scaleY={activeEntry.aspectScale.y}
               />
             </ZoomPanViewport>
           )}

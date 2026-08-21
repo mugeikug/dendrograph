@@ -144,4 +144,61 @@ describe('parseTree', () => {
   it('throws ParseError when input does not start with "["', () => {
     expect(() => parseTree('S NP the')).toThrow(ParseError)
   })
+
+  describe('arrow tags (~)', () => {
+    it('extracts an arrow tag from a labeled node', () => {
+      const tree = parseTree('[NP~1 the dog]')
+      expect(tree.arrowTag).toBe('1')
+      expect(plainText(tree.label)).toBe('NP')
+    })
+
+    it('extracts an arrow tag from a bare leaf word', () => {
+      const tree = parseTree('[VP see t~1]')
+      const trace = tree.children[1]
+      expect(trace.arrowTag).toBe('1')
+      expect(plainText(trace.label)).toBe('t')
+    })
+
+    it('does not set arrowTag when there is no "~"', () => {
+      const tree = parseTree('[NP the]')
+      expect(tree.arrowTag).toBeUndefined()
+    })
+
+    it('supports a "{...}"-braced tag containing spaces', () => {
+      const tree = parseTree('[VP see t~{agentive subject}]')
+      const trace = tree.children[1]
+      expect(trace.arrowTag).toBe('agentive subject')
+      expect(plainText(trace.label)).toBe('t')
+    })
+
+    it('does not let a space inside a braced tag terminate the token early', () => {
+      // Without brace-aware scanning, "t~{agentive" and "subject}" would become
+      // two separate (broken) leaves instead of one.
+      const tree = parseTree('[VP see t~{agentive subject}]')
+      expect(tree.children).toHaveLength(2)
+    })
+
+    it('unescapes "\\~" as a literal tilde instead of treating it as the marker', () => {
+      const tree = parseTree('[NP a\\~b]')
+      const leaf = tree.children[0]
+      expect(plainText(leaf.label)).toBe('a~b')
+      expect(leaf.arrowTag).toBeUndefined()
+    })
+
+    it('combines with a triangle marker in the order "label△~tag"', () => {
+      const tree = parseTree('[NP△~1 a very old man]')
+      expect(tree.isTriangle).toBe(true)
+      expect(tree.arrowTag).toBe('1')
+      expect(plainText(tree.label)).toBe('NP')
+      expect(plainText(tree.triangleYield)).toBe('a very old man')
+    })
+
+    it('does not apply the triangle marker to a bare leaf word (only to bracketed labels)', () => {
+      // "!" and "△" must stay usable as ordinary leaf text/punctuation.
+      const tree = parseTree('[VP Stop!]')
+      const leaf = tree.children[0]
+      expect(leaf.isTriangle).toBe(false)
+      expect(plainText(leaf.label)).toBe('Stop!')
+    })
+  })
 })

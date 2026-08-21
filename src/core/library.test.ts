@@ -23,10 +23,12 @@ describe('library', () => {
     expect(() => parseLibrary(JSON.stringify({ entries: [{ name: 'x' }] }))).toThrow(LibraryParseError)
   })
 
-  it('fills in defaults for missing optional fields', () => {
+  it('fills in defaults for missing optional fields, including files saved before movement arrows existed', () => {
     const parsed = parseLibrary(JSON.stringify({ entries: [{ input: '[S x]' }] }))
     expect(parsed.entries[0].name).toBe('無題1')
     expect(parsed.entries[0].adjustments).toEqual({})
+    expect(parsed.entries[0].arrowAdjustments).toEqual({})
+    expect(parsed.entries[0].aspectScale).toEqual({ x: 1, y: 1 })
     expect(typeof parsed.entries[0].id).toBe('string')
   })
 })

@@ -14,6 +14,9 @@ export interface TreeNode {
   isTriangle: boolean
   /** Only set when isTriangle is true: the text drawn under the triangle. */
   triangleYield?: LabelSegment[]
+  /** Movement-arrow marker (`~tag`). Two nodes sharing the same tag get connected
+   *  by an auto-generated arrow -- see core/movement.ts. */
+  arrowTag?: string
 }
 
 export function isTerminal(node: TreeNode): boolean {

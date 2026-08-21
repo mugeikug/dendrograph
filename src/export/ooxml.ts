@@ -1,12 +1,25 @@
 import type { LabelSegment } from '../core/treeModel'
 import type { LayoutNode, LayoutOptions, LayoutResult } from '../core/layout'
-import { nodeGeometry, resolvePos, type Adjustments } from '../render/geometry'
+import type { MovementArrow } from '../core/movement'
+import {
+  arrowAnchor,
+  nodeGeometry,
+  resolveArrowControlPoint,
+  resolvePos,
+  type Adjustments,
+  type ArrowAdjustments,
+} from '../render/geometry'
 
 const EMU_PER_PX = 9525 // 914400 EMU/inch ÷ 96 px/inch (CSS px)
 
 export interface OoxmlExportOptions {
   padding?: number
   groupName?: string
+  /** Independent horizontal/vertical stretch factors (1 = 100%, unchanged), applied to
+   *  node/arrow positions only -- text box and triangle sizes stay at their normal,
+   *  undistorted size, only moving to follow their (stretched) node. */
+  scaleX?: number
+  scaleY?: number
 }
 
 function escapeXml(s: string): string {
@@ -85,6 +98,57 @@ function triangleShape(id: number, name: string, xEmu: number, yEmu: number, wEm
 </wps:wsp>`
 }
 
+/** A curved movement-arrow: a quadratic-bezier `custGeom` path with a triangular
+ *  arrowhead on the end pointing at the antecedent. `from`/`control`/`to` are all in
+ *  EMU, already in the group's shared coordinate space (see `emu()` in
+ *  `layoutToOoxml`). The path's local `w`/`h` are set equal to the shape's own EMU
+ *  extent, so path coordinates can be used as EMU directly (verified against the
+ *  ECMA-376 Part 3 Primer: this makes the path's local coordinate system 1:1 with
+ *  the shape's own, no extra scaling needed). */
+function arrowShape(
+  id: number,
+  name: string,
+  from: { x: number; y: number },
+  control: { x: number; y: number },
+  to: { x: number; y: number },
+): string {
+  const minX = Math.min(from.x, control.x, to.x)
+  const minY = Math.min(from.y, control.y, to.y)
+  const w = Math.max(1, Math.max(from.x, control.x, to.x) - minX)
+  const h = Math.max(1, Math.max(from.y, control.y, to.y) - minY)
+  const local = (p: { x: number; y: number }) => ({ x: Math.round(p.x - minX), y: Math.round(p.y - minY) })
+  const lFrom = local(from)
+  const lControl = local(control)
+  const lTo = local(to)
+  return `<wps:wsp>
+  <wps:cNvPr id="${id}" name="${escapeXml(name)}${id}"/>
+  <wps:cNvSpPr/>
+  <wps:spPr>
+    <a:xfrm><a:off x="${Math.round(minX)}" y="${Math.round(minY)}"/><a:ext cx="${Math.round(w)}" cy="${Math.round(h)}"/></a:xfrm>
+    <a:custGeom>
+      <a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>
+      <a:rect l="0" t="0" r="0" b="0"/>
+      <a:pathLst>
+        <a:path w="${Math.round(w)}" h="${Math.round(h)}">
+          <a:moveTo><a:pt x="${lFrom.x}" y="${lFrom.y}"/></a:moveTo>
+          <a:quadBezTo>
+            <a:pt x="${lControl.x}" y="${lControl.y}"/>
+            <a:pt x="${lTo.x}" y="${lTo.y}"/>
+          </a:quadBezTo>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:noFill/>
+    <a:ln w="9525">
+      <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      <a:headEnd type="none"/>
+      <a:tailEnd type="triangle" w="med" len="med"/>
+    </a:ln>
+  </wps:spPr>
+  <wps:bodyPr/>
+</wps:wsp>`
+}
+
 function wrapPackage(groupName: string, widthEmu: number, heightEmu: number, shapesXml: string): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">
@@ -152,20 +216,28 @@ export function layoutToOoxml(
   layout: LayoutResult,
   layoutOptions: LayoutOptions,
   adjustments: Adjustments,
+  arrows: MovementArrow[] = [],
+  arrowAdjustments: ArrowAdjustments = {},
   exportOptions: OoxmlExportOptions = {},
 ): string {
   const padding = exportOptions.padding ?? 24
   const groupName = exportOptions.groupName ?? 'Dendrograph'
+  // Baked into every node/arrow position below (not a blanket group transform), so
+  // branches and arrows stretch with the aspect-ratio control while text and shapes
+  // keep their normal, undistorted size -- matching the SVG preview's approach.
+  const scaleX = exportOptions.scaleX ?? 1
+  const scaleY = exportOptions.scaleY ?? 1
 
   const px = (v: number) => v + padding
   const emu = (v: number) => Math.round(px(v) * EMU_PER_PX) // absolute position (includes padding offset)
   const emuSize = (v: number) => Math.round(v * EMU_PER_PX) // width/height (no padding offset)
+  const emuPoint = (p: { x: number; y: number }) => ({ x: emu(p.x), y: emu(p.y) })
 
   const shapes: string[] = []
   let nextId = 2 // id 1 is reserved for the outer wp:docPr
 
   function walk(n: LayoutNode) {
-    const pos = resolvePos(n, adjustments)
+    const pos = resolvePos(n, adjustments, scaleX, scaleY)
     const hasLabel = n.node.label.length > 0
     const g = nodeGeometry(pos.y, layoutOptions, hasLabel)
 
@@ -176,7 +248,7 @@ export function layoutToOoxml(
     const edgeStartY = hasLabel ? g.childEdgeY + layoutOptions.fontSize * 0.3 : g.childEdgeY
 
     for (const child of n.children) {
-      const childPos = resolvePos(child, adjustments)
+      const childPos = resolvePos(child, adjustments, scaleX, scaleY)
       const childTopY = nodeGeometry(childPos.y, layoutOptions).topY
       shapes.push(lineShape(nextId++, 'Edge', emu(pos.x), emu(edgeStartY), emu(childPos.x), emu(childTopY)))
     }
@@ -228,8 +300,25 @@ export function layoutToOoxml(
 
   walk(layout.root)
 
-  const widthEmu = Math.round((layout.width + padding * 2) * EMU_PER_PX)
-  const heightEmu = Math.round((layout.height + padding * 2) * EMU_PER_PX)
+  for (const arrow of arrows) {
+    const from = arrowAnchor(arrow.fromPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+    const to = arrowAnchor(arrow.toPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+    const control = resolveArrowControlPoint(arrow.id, from, to, arrowAdjustments)
+    shapes.push(arrowShape(nextId++, 'Arrow', emuPoint(from), emuPoint(control), emuPoint(to)))
+  }
+
+  const contentHeight = Math.max(
+    layout.height * scaleY,
+    ...arrows.flatMap((arrow) => {
+      const from = arrowAnchor(arrow.fromPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+      const to = arrowAnchor(arrow.toPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+      const control = resolveArrowControlPoint(arrow.id, from, to, arrowAdjustments)
+      return [from.y, to.y, control.y]
+    }),
+  )
+
+  const widthEmu = Math.round((layout.width * scaleX + padding * 2) * EMU_PER_PX)
+  const heightEmu = Math.round((contentHeight + padding * 2) * EMU_PER_PX)
 
   return wrapPackage(groupName, widthEmu, heightEmu, shapes.join('\n'))
 }

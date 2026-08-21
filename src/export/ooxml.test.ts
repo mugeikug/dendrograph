@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseTree } from '../core/parser'
 import { defaultLayoutOptions, layoutTree } from '../core/layout'
 import { approximateMeasureText } from '../core/textWidth'
+import { detectMovementArrows } from '../core/movement'
 import { layoutToOoxml } from './ooxml'
 
 const opts = { ...defaultLayoutOptions, measureText: approximateMeasureText }
@@ -79,5 +80,63 @@ describe('layoutToOoxml', () => {
     for (const tag of ['wps:wsp', 'wpg:wgp', 'a:xfrm', 'w:p', 'pkg:package']) {
       expect(countOpenTags(xml, tag)).toBe(countOccurrences(xml, `</${tag}>`))
     }
+  })
+
+  describe('aspect-ratio scale', () => {
+    it('stretches node/edge positions vertically but leaves text-box and triangle sizes untouched', () => {
+      const tree = parseTree('[S [NP△ the man] [VP runs]]')
+      const layout = layoutTree(tree, opts)
+      const unscaled = layoutToOoxml(layout, opts, {})
+      const scaled = layoutToOoxml(layout, opts, {}, [], {}, { scaleX: 1, scaleY: 2 })
+
+      // The overall group grows taller (positions moved further apart)...
+      const groupHeight = (xml: string) => Number(xml.match(/<wp:extent cx="\d+" cy="(\d+)"\/>/)![1])
+      expect(groupHeight(scaled)).toBeGreaterThan(groupHeight(unscaled) * 1.5)
+
+      // ...but every text box keeps the exact same width/height it had unscaled (text
+      // itself must never be stretched, only repositioned).
+      const textBoxSizes = (xml: string) => [...xml.matchAll(/<a:ext cx="(\d+)" cy="(\d+)"\/>\s*<\/a:xfrm>\s*<a:prstGeom prst="rect"/g)].map((m) => `${m[1]}x${m[2]}`)
+      expect(textBoxSizes(scaled)).toEqual(textBoxSizes(unscaled))
+
+      // ...and the triangle keeps its own height too (only its position moves).
+      const triangleSize = (xml: string) => xml.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>\s*<\/a:xfrm>\s*<a:prstGeom prst="triangle"/)
+      expect(triangleSize(scaled)![2]).toBe(triangleSize(unscaled)![2])
+    })
+  })
+
+  describe('movement arrows', () => {
+    it('adds one custGeom shape per arrow, with a triangle arrowhead', () => {
+      const tree = parseTree("[CP What~1 [C' C [IP you [I' did [VP see t~1]]]]]")
+      const layout = layoutTree(tree, opts)
+      const arrows = detectMovementArrows(tree)
+      expect(arrows).toHaveLength(1)
+
+      const withoutArrows = layoutToOoxml(layout, opts, {})
+      const withArrows = layoutToOoxml(layout, opts, {}, arrows, {})
+
+      expect(countOccurrences(withArrows, '<wps:wsp>')).toBe(countOccurrences(withoutArrows, '<wps:wsp>') + 1)
+      expect(withArrows).toContain('<a:custGeom>')
+      expect(withArrows).toContain('<a:quadBezTo>')
+      expect(withArrows).toContain('a:tailEnd type="triangle"')
+    })
+
+    it('applies an arrow adjustment to the generated curve', () => {
+      const tree = parseTree('[S a~1 b~1]')
+      const layout = layoutTree(tree, opts)
+      const arrows = detectMovementArrows(tree)
+      const withoutAdjust = layoutToOoxml(layout, opts, {}, arrows, {})
+      const withAdjust = layoutToOoxml(layout, opts, {}, arrows, { [arrows[0].id]: { dx: 0, dy: 300 } })
+      expect(withAdjust).not.toBe(withoutAdjust)
+    })
+
+    it('produces well-formed custGeom/path tags even with an arrow present', () => {
+      const tree = parseTree("[CP What~1 [C' C [IP you [I' did [VP see t~1]]]]]")
+      const layout = layoutTree(tree, opts)
+      const arrows = detectMovementArrows(tree)
+      const xml = layoutToOoxml(layout, opts, {}, arrows, {})
+      for (const tag of ['wps:wsp', 'a:custGeom', 'a:path', 'a:moveTo', 'a:quadBezTo', 'a:ln']) {
+        expect(countOpenTags(xml, tag)).toBe(countOccurrences(xml, `</${tag}>`))
+      }
+    })
   })
 })
