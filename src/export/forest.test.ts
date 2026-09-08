@@ -63,4 +63,16 @@ describe('treeToForestCode', () => {
       expect(code).toContain(String.raw`$\begin{bmatrix} \text{CASE} & \text{nom\%} \end{bmatrix}$`)
     })
   })
+
+  describe('\\it{} / \\bf{} inline styling', () => {
+    it('wraps an italic segment in \\textit{}', () => {
+      const code = treeToForestCode(parseTree('[\\it{John}]'), { standalone: false })
+      expect(code).toContain('\\textit{John}')
+    })
+
+    it('wraps a bold segment in \\textbf{}', () => {
+      const code = treeToForestCode(parseTree('[\\bf{John}]'), { standalone: false })
+      expect(code).toContain('\\textbf{John}')
+    })
+  })
 })

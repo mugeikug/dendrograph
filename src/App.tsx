@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ParseError, parseTree } from './core/parser'
+import { ParseError, parseLineStyles, parseTree } from './core/parser'
 import { defaultLayoutOptions, layoutTree } from './core/layout'
 import { canvasMeasureText } from './core/textWidth'
 import { createEntry, LibraryParseError, type TreeLibrary } from './core/library'
-import { detectMovementArrows } from './core/movement'
+import { detectConnectors } from './core/movement'
+import type { LineStyleSpec } from './core/lineStyle'
 import { TreeCanvas, canvasSize, type Adjustments, type ArrowAdjustments, type AspectScale, type NodeAdjustment } from './render/TreeCanvas'
 import { ZoomPanViewport } from './render/ZoomPanViewport'
 import { copyPngToClipboard, downloadPng, downloadSvg } from './export/imageExport'
@@ -31,6 +32,7 @@ function makeInitialState(): { library: TreeLibrary; activeId: string } {
     entry.adjustments = initial?.adjustments ?? {}
     entry.arrowAdjustments = initial?.arrowAdjustments ?? {}
     entry.aspectScale = initial?.aspectScale ?? { x: 1, y: 1 }
+    entry.branchWidthPt = initial?.branchWidthPt ?? 1
     return { library: { version: 1, entries: [entry] }, activeId: entry.id }
   }
   const entry = createEntry('サンプル', SAMPLE)
@@ -52,18 +54,21 @@ function App() {
     detectWordHost().then(setIsWordHost)
   }, [])
 
-  const { tree, layout, options, error } = useMemo(() => {
-    const options = { ...defaultLayoutOptions, measureText: canvasMeasureText }
+  const { tree, layout, options, lineStyles, error } = useMemo(() => {
+    const options = { ...defaultLayoutOptions, measureText: canvasMeasureText, branchWidthPt: activeEntry.branchWidthPt }
     try {
       const tree = parseTree(activeEntry.input)
-      return { tree, layout: layoutTree(tree, options), options, error: null as string | null }
+      // `\linestyle` directives are validated by parseTree itself (it throws the same
+      // ParseError parseLineStyles would), so by the time we get here this can't throw.
+      const lineStyles = parseLineStyles(activeEntry.input)
+      return { tree, layout: layoutTree(tree, options), options, lineStyles, error: null as string | null }
     } catch (e) {
       const message = e instanceof ParseError ? `${e.message} (位置 ${e.position})` : String(e)
-      return { tree: null, layout: null, options, error: message }
+      return { tree: null, layout: null, options, lineStyles: new Map<string, LineStyleSpec>(), error: message }
     }
-  }, [activeEntry.input])
+  }, [activeEntry.input, activeEntry.branchWidthPt])
 
-  const arrows = useMemo(() => (tree ? detectMovementArrows(tree) : []), [tree])
+  const connectors = useMemo(() => (tree ? detectConnectors(tree) : []), [tree])
 
   const updateActiveEntry = (
     patch: Partial<{
@@ -72,6 +77,7 @@ function App() {
       adjustments: Adjustments
       arrowAdjustments: ArrowAdjustments
       aspectScale: AspectScale
+      branchWidthPt: number
     }>,
   ) => {
     setState((prev) => ({
@@ -117,6 +123,14 @@ function App() {
 
   const handleResetAspectScale = () => updateActiveEntry({ aspectScale: { x: 1, y: 1 } })
 
+  // Same text-field pattern as the aspect-ratio inputs: only a valid positive number
+  // is committed, so the field can be blank/mid-edit without immediately resetting.
+  const handleBranchWidthChange = (ptText: string) => {
+    const pt = Number(ptText)
+    if (!Number.isFinite(pt) || pt <= 0) return
+    updateActiveEntry({ branchWidthPt: pt })
+  }
+
   const handleNewEntry = () => {
     const entry = createEntry(`新規${library.entries.length + 1}`, SAMPLE)
     setState((prev) => ({ library: { ...prev.library, entries: [...prev.library.entries, entry] }, activeId: entry.id }))
@@ -157,7 +171,7 @@ function App() {
     if (!layout) return
     setInsertStatus('挿入中...')
     try {
-      const ooxml = layoutToOoxml(layout, options, activeEntry.adjustments, arrows, activeEntry.arrowAdjustments, {
+      const ooxml = layoutToOoxml(layout, options, activeEntry.adjustments, connectors, lineStyles, activeEntry.arrowAdjustments, {
         scaleX: activeEntry.aspectScale.x,
         scaleY: activeEntry.aspectScale.y,
       })
@@ -175,6 +189,7 @@ function App() {
         adjustments: activeEntry.adjustments,
         arrowAdjustments: activeEntry.arrowAdjustments,
         aspectScale: activeEntry.aspectScale,
+        branchWidthPt: activeEntry.branchWidthPt,
       },
       (state) => {
         updateActiveEntry({
@@ -182,6 +197,7 @@ function App() {
           adjustments: state.adjustments,
           arrowAdjustments: state.arrowAdjustments,
           aspectScale: state.aspectScale,
+          branchWidthPt: state.branchWidthPt,
         })
       },
     )
@@ -193,6 +209,7 @@ function App() {
       adjustments: activeEntry.adjustments,
       arrowAdjustments: activeEntry.arrowAdjustments,
       aspectScale: activeEntry.aspectScale,
+      branchWidthPt: activeEntry.branchWidthPt,
     })
   }
 
@@ -228,7 +245,16 @@ function App() {
   }
 
   const { width: contentWidth, height: contentHeight } = layout
-    ? canvasSize(layout, arrows, options, activeEntry.adjustments, activeEntry.arrowAdjustments, activeEntry.aspectScale.x, activeEntry.aspectScale.y)
+    ? canvasSize(
+        layout,
+        connectors,
+        options,
+        activeEntry.adjustments,
+        lineStyles,
+        activeEntry.arrowAdjustments,
+        activeEntry.aspectScale.x,
+        activeEntry.aspectScale.y,
+      )
     : { width: 0, height: 0 }
 
   return (
@@ -319,6 +345,20 @@ function App() {
             </button>
           </div>
 
+          <div id="branch-width-toolbar">
+            <label htmlFor="branch-width">枝の太さ</label>
+            <input
+              id="branch-width"
+              type="number"
+              min={0.25}
+              max={10}
+              step={0.25}
+              value={activeEntry.branchWidthPt}
+              onChange={(e) => handleBranchWidthChange(e.target.value)}
+            />
+            <span>pt</span>
+          </div>
+
           <div id="toolbar">
             <button
               type="button"
@@ -371,7 +411,8 @@ function App() {
                 adjustments={activeEntry.adjustments}
                 onAdjustNode={handleAdjustNode}
                 onResetNode={handleResetNode}
-                arrows={arrows}
+                connectors={connectors}
+                lineStyles={lineStyles}
                 arrowAdjustments={activeEntry.arrowAdjustments}
                 onAdjustArrow={handleAdjustArrow}
                 onResetArrow={handleResetArrow}

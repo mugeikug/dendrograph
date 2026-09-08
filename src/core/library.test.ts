@@ -29,6 +29,7 @@ describe('library', () => {
     expect(parsed.entries[0].adjustments).toEqual({})
     expect(parsed.entries[0].arrowAdjustments).toEqual({})
     expect(parsed.entries[0].aspectScale).toEqual({ x: 1, y: 1 })
+    expect(parsed.entries[0].branchWidthPt).toBe(1)
     expect(typeof parsed.entries[0].id).toBe('string')
   })
 })

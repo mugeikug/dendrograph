@@ -1,4 +1,5 @@
 import type { LayoutNode, LayoutOptions, LayoutResult } from '../core/layout'
+import type { ConnectorShape } from '../core/lineStyle'
 
 export interface NodeAdjustment {
   dx: number
@@ -95,5 +96,40 @@ export function resolveArrowControlPoint(
 ): Point {
   const def = defaultArrowControlPoint(from, to)
   const adj = arrowAdjustments[arrowId]
+  return { x: def.x + (adj?.dx ?? 0), y: def.y + (adj?.dy ?? 0) }
+}
+
+/** How far below the lower of the two anchors the bus row sits by default -- enough
+ *  that the staple reads unambiguously as コ-shaped at a glance (a bus row placed
+ *  between the two anchors can look like a plain diagonal jog instead). */
+const ELBOW_BUS_MARGIN = 24
+
+/** Default "bus" point for a `square` (right-angle) connector: a 3-segment コ-shaped
+ *  staple -- down from `from`, across at a shared horizontal level below both anchors,
+ *  up to `to` -- rather than a single corner, so the connector doesn't look lopsided
+ *  when the two anchors are far apart in depth. Only this point's `y` (the bus row) is
+ *  meaningful; the renderer/exporter derive the two actual corners as `(from.x, y)`
+ *  and `(to.x, y)`. Placed below the deeper of the two anchors (not at their midpoint)
+ *  so the staple shape is unambiguous even at a glance, matching the same "swoop
+ *  clear of the tree" convention as `defaultArrowControlPoint`'s curve bulge. */
+export function defaultElbowBusPoint(from: Point, to: Point): Point {
+  return { x: (from.x + to.x) / 2, y: Math.max(from.y, to.y) + ELBOW_BUS_MARGIN }
+}
+
+/** The bend point actually used for rendering/export -- a curve's control point or a
+ *  square connector's bus point (see `defaultElbowBusPoint`), whichever `shape` calls
+ *  for -- shifted by whatever the user dragged. Both shapes share one
+ *  adjustment-offset mechanism/storage (`arrowAdjustments`), so switching a tag's
+ *  `\linestyle` shape doesn't lose a previously-dragged nudge in a confusing way (it's
+ *  just reinterpreted relative to the new shape's own default point). */
+export function resolveConnectorBendPoint(
+  connectorId: string,
+  shape: ConnectorShape,
+  from: Point,
+  to: Point,
+  arrowAdjustments: ArrowAdjustments,
+): Point {
+  const def = shape === 'square' ? defaultElbowBusPoint(from, to) : defaultArrowControlPoint(from, to)
+  const adj = arrowAdjustments[connectorId]
   return { x: def.x + (adj?.dx ?? 0), y: def.y + (adj?.dy ?? 0) }
 }

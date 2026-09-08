@@ -15,6 +15,10 @@ export interface LayoutOptions {
    *  leaves -- this is the conventional modern rendering, not a same-baseline layout. */
   triangleHeight: number
   measureText: MeasureText
+  /** Stroke width, in pt, for the tree's own branches (not movement arrows/connectors
+   *  -- those default to this same width but can be overridden per-tag, see
+   *  core/lineStyle.ts). */
+  branchWidthPt: number
 }
 
 export const defaultLayoutOptions: LayoutOptions = {
@@ -25,6 +29,7 @@ export const defaultLayoutOptions: LayoutOptions = {
   labelGap: 6,
   triangleHeight: 36,
   measureText: approximateMeasureText,
+  branchWidthPt: 1,
 }
 
 export interface LayoutNode {

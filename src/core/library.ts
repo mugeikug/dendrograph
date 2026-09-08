@@ -1,5 +1,7 @@
 import { DEFAULT_ASPECT_SCALE, type Adjustments, type ArrowAdjustments, type AspectScale } from '../render/geometry'
 
+const DEFAULT_BRANCH_WIDTH_PT = 1
+
 export interface TreeEntry {
   id: string
   name: string
@@ -7,6 +9,10 @@ export interface TreeEntry {
   adjustments: Adjustments
   arrowAdjustments: ArrowAdjustments
   aspectScale: AspectScale
+  /** Stroke width, in pt, for this tree's own branches (not movement arrows/connectors
+   *  -- those default to this same width but can be overridden per-tag via a
+   *  `\linestyle` directive in the notation itself). */
+  branchWidthPt: number
 }
 
 export interface TreeLibrary {
@@ -19,7 +25,15 @@ function randomId(): string {
 }
 
 export function createEntry(name: string, input: string): TreeEntry {
-  return { id: randomId(), name, input, adjustments: {}, arrowAdjustments: {}, aspectScale: { ...DEFAULT_ASPECT_SCALE } }
+  return {
+    id: randomId(),
+    name,
+    input,
+    adjustments: {},
+    arrowAdjustments: {},
+    aspectScale: { ...DEFAULT_ASPECT_SCALE },
+    branchWidthPt: DEFAULT_BRANCH_WIDTH_PT,
+  }
 }
 
 export function createEmptyLibrary(): TreeLibrary {
@@ -55,6 +69,8 @@ export function parseLibrary(json: string): TreeLibrary {
       rawAspect && typeof rawAspect.x === 'number' && typeof rawAspect.y === 'number'
         ? { x: rawAspect.x, y: rawAspect.y }
         : { ...DEFAULT_ASPECT_SCALE }
+    // Older saved files predate the branch-width control and won't have this field.
+    const branchWidthPt = typeof e.branchWidthPt === 'number' ? e.branchWidthPt : DEFAULT_BRANCH_WIDTH_PT
     return {
       id: typeof e.id === 'string' ? e.id : randomId(),
       name: typeof e.name === 'string' ? e.name : `無題${i + 1}`,
@@ -62,6 +78,7 @@ export function parseLibrary(json: string): TreeLibrary {
       adjustments,
       arrowAdjustments,
       aspectScale,
+      branchWidthPt,
     }
   })
   return { version: 1, entries }

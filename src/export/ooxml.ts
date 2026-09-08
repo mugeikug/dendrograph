@@ -1,14 +1,16 @@
 import type { LabelSegment } from '../core/treeModel'
 import { measureLabelHeight, type LayoutNode, type LayoutOptions, type LayoutResult } from '../core/layout'
 import { renderMathToOmml } from '../core/mathRender'
-import type { MovementArrow } from '../core/movement'
+import type { Connector } from '../core/movement'
+import { ptToPx, resolveLineStyle, type ConnectorShape, type EndMarker, type LineStyleSpec, type LineType } from '../core/lineStyle'
 import {
   arrowAnchor,
   nodeGeometry,
-  resolveArrowControlPoint,
+  resolveConnectorBendPoint,
   resolvePos,
   type Adjustments,
   type ArrowAdjustments,
+  type Point,
 } from '../render/geometry'
 
 const EMU_PER_PX = 9525 // 914400 EMU/inch ÷ 96 px/inch (CSS px)
@@ -35,6 +37,7 @@ function escapeXml(s: string): string {
 function runsFromSegments(segments: LabelSegment[], fontSizePx: number): string {
   const baseHalfPt = Math.round(fontSizePx * 0.75 * 2)
   const smallHalfPt = Math.round(baseHalfPt * 0.68)
+  const fonts = '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>'
   return segments
     .map((seg) => {
       // A native Word equation object -- not a text run at all. Verified against real
@@ -42,10 +45,16 @@ function runsFromSegments(segments: LabelSegment[], fontSizePx: number): string 
       // bracket) that `<m:oMath>` renders correctly as a sibling of `<w:r>` runs inside
       // a `w:txbxContent` paragraph; see the Phase 6 spike notes in the project plan.
       if (seg.script === 'math') return renderMathToOmml(seg.text, seg.display ?? false)
-      const rPr =
-        seg.script === 'normal'
-          ? `<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="${baseHalfPt}"/></w:rPr>`
-          : `<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="${smallHalfPt}"/><w:vertAlign w:val="${seg.script === 'sub' ? 'subscript' : 'superscript'}"/></w:rPr>`
+      let rPr: string
+      if (seg.script === 'sub' || seg.script === 'sup') {
+        rPr = `<w:rPr>${fonts}<w:sz w:val="${smallHalfPt}"/><w:vertAlign w:val="${seg.script === 'sub' ? 'subscript' : 'superscript'}"/></w:rPr>`
+      } else if (seg.script === 'italic') {
+        rPr = `<w:rPr>${fonts}<w:i/><w:sz w:val="${baseHalfPt}"/></w:rPr>`
+      } else if (seg.script === 'bold') {
+        rPr = `<w:rPr>${fonts}<w:b/><w:sz w:val="${baseHalfPt}"/></w:rPr>`
+      } else {
+        rPr = `<w:rPr>${fonts}<w:sz w:val="${baseHalfPt}"/></w:rPr>`
+      }
       return `<w:r>${rPr}<w:t xml:space="preserve">${escapeXml(seg.text)}</w:t></w:r>`
     })
     .join('')
@@ -72,7 +81,7 @@ function textBoxShape(id: number, name: string, segments: LabelSegment[], xEmu: 
 </wps:wsp>`
 }
 
-function lineShape(id: number, name: string, x1: number, y1: number, x2: number, y2: number): string {
+function lineShape(id: number, name: string, x1: number, y1: number, x2: number, y2: number, strokeWidthEmu: number): string {
   const left = Math.min(x1, x2)
   const top = Math.min(y1, y2)
   const w = Math.abs(x2 - x1) || 1
@@ -84,13 +93,13 @@ function lineShape(id: number, name: string, x1: number, y1: number, x2: number,
   <wps:spPr>
     <a:xfrm${flip}><a:off x="${left}" y="${top}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>
     <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
-    <a:ln w="9525"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+    <a:ln w="${strokeWidthEmu}"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
   </wps:spPr>
   <wps:bodyPr/>
 </wps:wsp>`
 }
 
-function triangleShape(id: number, name: string, xEmu: number, yEmu: number, wEmu: number, hEmu: number): string {
+function triangleShape(id: number, name: string, xEmu: number, yEmu: number, wEmu: number, hEmu: number, strokeWidthEmu: number): string {
   return `<wps:wsp>
   <wps:cNvPr id="${id}" name="${escapeXml(name)}${id}"/>
   <wps:cNvSpPr/>
@@ -98,34 +107,55 @@ function triangleShape(id: number, name: string, xEmu: number, yEmu: number, wEm
     <a:xfrm><a:off x="${xEmu}" y="${yEmu}"/><a:ext cx="${wEmu}" cy="${hEmu}"/></a:xfrm>
     <a:prstGeom prst="triangle"><a:avLst/></a:prstGeom>
     <a:noFill/>
-    <a:ln w="9525"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+    <a:ln w="${strokeWidthEmu}"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
   </wps:spPr>
   <wps:bodyPr/>
 </wps:wsp>`
 }
 
-/** A curved movement-arrow: a quadratic-bezier `custGeom` path with a triangular
- *  arrowhead on the end pointing at the antecedent. `from`/`control`/`to` are all in
- *  EMU, already in the group's shared coordinate space (see `emu()` in
- *  `layoutToOoxml`). The path's local `w`/`h` are set equal to the shape's own EMU
- *  extent, so path coordinates can be used as EMU directly (verified against the
- *  ECMA-376 Part 3 Primer: this makes the path's local coordinate system 1:1 with
- *  the shape's own, no extra scaling needed). */
-function arrowShape(
+/** A connector between two nodes: `curve` is a quadratic-bezier `custGeom` path
+ *  (`a:quadBezTo`) through `bend` (its control point); `square` is a 3-segment
+ *  コ-shaped staple (`a:lnTo` x3) -- down from `from` to `bend`'s y (the shared "bus"
+ *  row), across, then up/down to `to` (only `bend.y` is used; the two actual corners
+ *  sit at `from.x`/`to.x`, not at `bend.x` -- see `defaultElbowBusPoint`).
+ *  `from`/`bend`/`to` are all in EMU, already in the group's shared coordinate space
+ *  (see `emu()` in `layoutToOoxml`). The path's local `w`/`h` are set equal to the
+ *  shape's own EMU extent, so path coordinates can be used as EMU directly (verified
+ *  against the ECMA-376 Part 3 Primer: this makes the path's local coordinate system
+ *  1:1 with the shape's own, no extra scaling needed). `headFrom`/`headTo` put an
+ *  arrowhead at the `from`/`to` end respectively (verified against real Word
+ *  insertion, including the auto-growing-bracket delimiter fix -- see the Phase 6/7
+ *  spike notes in the project plan). */
+function connectorShape(
   id: number,
   name: string,
-  from: { x: number; y: number },
-  control: { x: number; y: number },
-  to: { x: number; y: number },
+  from: Point,
+  bend: Point,
+  to: Point,
+  shape: ConnectorShape,
+  headFrom: EndMarker,
+  headTo: EndMarker,
+  strokeWidthEmu: number,
+  lineType: LineType,
 ): string {
-  const minX = Math.min(from.x, control.x, to.x)
-  const minY = Math.min(from.y, control.y, to.y)
-  const w = Math.max(1, Math.max(from.x, control.x, to.x) - minX)
-  const h = Math.max(1, Math.max(from.y, control.y, to.y) - minY)
-  const local = (p: { x: number; y: number }) => ({ x: Math.round(p.x - minX), y: Math.round(p.y - minY) })
+  const corner1: Point = { x: from.x, y: bend.y }
+  const corner2: Point = { x: to.x, y: bend.y }
+  const allPoints = shape === 'square' ? [from, corner1, corner2, to] : [from, bend, to]
+  const minX = Math.min(...allPoints.map((p) => p.x))
+  const minY = Math.min(...allPoints.map((p) => p.y))
+  const w = Math.max(1, Math.max(...allPoints.map((p) => p.x)) - minX)
+  const h = Math.max(1, Math.max(...allPoints.map((p) => p.y)) - minY)
+  const local = (p: Point) => ({ x: Math.round(p.x - minX), y: Math.round(p.y - minY) })
   const lFrom = local(from)
-  const lControl = local(control)
+  const lBend = local(bend)
   const lTo = local(to)
+  const pathBody =
+    shape === 'square'
+      ? `<a:moveTo><a:pt x="${lFrom.x}" y="${lFrom.y}"/></a:moveTo><a:lnTo><a:pt x="${local(corner1).x}" y="${local(corner1).y}"/></a:lnTo><a:lnTo><a:pt x="${local(corner2).x}" y="${local(corner2).y}"/></a:lnTo><a:lnTo><a:pt x="${lTo.x}" y="${lTo.y}"/></a:lnTo>`
+      : `<a:moveTo><a:pt x="${lFrom.x}" y="${lFrom.y}"/></a:moveTo><a:quadBezTo><a:pt x="${lBend.x}" y="${lBend.y}"/><a:pt x="${lTo.x}" y="${lTo.y}"/></a:quadBezTo>`
+  const dashXml = lineType === 'solid' ? '' : `<a:prstDash val="${lineType === 'dashed' ? 'dash' : 'sysDot'}"/>`
+  const headEndType = headFrom === 'arrow' ? 'triangle' : 'none'
+  const tailEndType = headTo === 'arrow' ? 'triangle' : 'none'
   return `<wps:wsp>
   <wps:cNvPr id="${id}" name="${escapeXml(name)}${id}"/>
   <wps:cNvSpPr/>
@@ -136,19 +166,16 @@ function arrowShape(
       <a:rect l="0" t="0" r="0" b="0"/>
       <a:pathLst>
         <a:path w="${Math.round(w)}" h="${Math.round(h)}">
-          <a:moveTo><a:pt x="${lFrom.x}" y="${lFrom.y}"/></a:moveTo>
-          <a:quadBezTo>
-            <a:pt x="${lControl.x}" y="${lControl.y}"/>
-            <a:pt x="${lTo.x}" y="${lTo.y}"/>
-          </a:quadBezTo>
+          ${pathBody}
         </a:path>
       </a:pathLst>
     </a:custGeom>
     <a:noFill/>
-    <a:ln w="9525">
+    <a:ln w="${strokeWidthEmu}">
       <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
-      <a:headEnd type="none"/>
-      <a:tailEnd type="triangle" w="med" len="med"/>
+      ${dashXml}
+      <a:headEnd type="${headEndType}"${headEndType === 'triangle' ? ' w="med" len="med"' : ''}/>
+      <a:tailEnd type="${tailEndType}"${tailEndType === 'triangle' ? ' w="med" len="med"' : ''}/>
     </a:ln>
   </wps:spPr>
   <wps:bodyPr/>
@@ -223,17 +250,19 @@ export function layoutToOoxml(
   layout: LayoutResult,
   layoutOptions: LayoutOptions,
   adjustments: Adjustments,
-  arrows: MovementArrow[] = [],
+  connectors: Connector[] = [],
+  lineStyles: Map<string, LineStyleSpec> = new Map(),
   arrowAdjustments: ArrowAdjustments = {},
   exportOptions: OoxmlExportOptions = {},
 ): string {
   const padding = exportOptions.padding ?? 24
   const groupName = exportOptions.groupName ?? 'Dendrograph'
-  // Baked into every node/arrow position below (not a blanket group transform), so
-  // branches and arrows stretch with the aspect-ratio control while text and shapes
-  // keep their normal, undistorted size -- matching the SVG preview's approach.
+  // Baked into every node/connector position below (not a blanket group transform), so
+  // branches and connectors stretch with the aspect-ratio control while text and
+  // shapes keep their normal, undistorted size -- matching the SVG preview's approach.
   const scaleX = exportOptions.scaleX ?? 1
   const scaleY = exportOptions.scaleY ?? 1
+  const branchWidthEmu = Math.round(ptToPx(layoutOptions.branchWidthPt) * EMU_PER_PX)
 
   const px = (v: number) => v + padding
   const emu = (v: number) => Math.round(px(v) * EMU_PER_PX) // absolute position (includes padding offset)
@@ -263,7 +292,7 @@ export function layoutToOoxml(
     for (const child of n.children) {
       const childPos = resolvePos(child, adjustments, scaleX, scaleY)
       const childTopY = nodeGeometry(childPos.y, layoutOptions).topY
-      shapes.push(lineShape(nextId++, 'Edge', emu(pos.x), emu(edgeStartY), emu(childPos.x), emu(childTopY)))
+      shapes.push(lineShape(nextId++, 'Edge', emu(pos.x), emu(edgeStartY), emu(childPos.x), emu(childTopY), branchWidthEmu))
     }
 
     if (hasLabel) {
@@ -291,6 +320,7 @@ export function layoutToOoxml(
           emu(g.triangleApexY),
           emuSize(n.width),
           emuSize(g.triangleBaseY - g.triangleApexY),
+          branchWidthEmu,
         ),
       )
       if (n.node.triangleYield) {
@@ -314,20 +344,36 @@ export function layoutToOoxml(
 
   walk(layout.root)
 
-  for (const arrow of arrows) {
-    const from = arrowAnchor(arrow.fromPath, layout, adjustments, layoutOptions, scaleX, scaleY)
-    const to = arrowAnchor(arrow.toPath, layout, adjustments, layoutOptions, scaleX, scaleY)
-    const control = resolveArrowControlPoint(arrow.id, from, to, arrowAdjustments)
-    shapes.push(arrowShape(nextId++, 'Arrow', emuPoint(from), emuPoint(control), emuPoint(to)))
+  for (const connector of connectors) {
+    const from = arrowAnchor(connector.fromPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+    const to = arrowAnchor(connector.toPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+    const resolved = resolveLineStyle(connector.tag, lineStyles, layoutOptions.branchWidthPt)
+    const bend = resolveConnectorBendPoint(connector.id, resolved.shape, from, to, arrowAdjustments)
+    const strokeWidthEmu = Math.round(resolved.widthPx * EMU_PER_PX)
+    shapes.push(
+      connectorShape(
+        nextId++,
+        'Connector',
+        emuPoint(from),
+        emuPoint(bend),
+        emuPoint(to),
+        resolved.shape,
+        resolved.headFrom,
+        resolved.headTo,
+        strokeWidthEmu,
+        resolved.lineType,
+      ),
+    )
   }
 
   const contentHeight = Math.max(
     layout.height * scaleY,
-    ...arrows.flatMap((arrow) => {
-      const from = arrowAnchor(arrow.fromPath, layout, adjustments, layoutOptions, scaleX, scaleY)
-      const to = arrowAnchor(arrow.toPath, layout, adjustments, layoutOptions, scaleX, scaleY)
-      const control = resolveArrowControlPoint(arrow.id, from, to, arrowAdjustments)
-      return [from.y, to.y, control.y]
+    ...connectors.flatMap((connector) => {
+      const from = arrowAnchor(connector.fromPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+      const to = arrowAnchor(connector.toPath, layout, adjustments, layoutOptions, scaleX, scaleY)
+      const shape = resolveLineStyle(connector.tag, lineStyles, layoutOptions.branchWidthPt).shape
+      const bend = resolveConnectorBendPoint(connector.id, shape, from, to, arrowAdjustments)
+      return [from.y, to.y, bend.y]
     }),
   )
 

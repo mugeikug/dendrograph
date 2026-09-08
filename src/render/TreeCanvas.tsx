@@ -3,11 +3,12 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { LabelSegment } from '../core/treeModel'
 import { measureLabelHeight, measureSegmentWidth, type LayoutNode, type LayoutOptions, type LayoutResult } from '../core/layout'
 import { renderMathToSvg } from '../core/mathRender'
-import type { MovementArrow } from '../core/movement'
+import type { Connector } from '../core/movement'
+import { ptToPx, resolveLineStyle, type LineStyleSpec, type LineType } from '../core/lineStyle'
 import {
   arrowAnchor,
   nodeGeometry,
-  resolveArrowControlPoint,
+  resolveConnectorBendPoint,
   resolvePos,
   type Adjustments,
   type ArrowAdjustments,
@@ -16,13 +17,24 @@ import {
 
 export type { Adjustments, NodeAdjustment, ArrowAdjustments, AspectScale } from './geometry'
 
+/** Solid lines need no `stroke-dasharray`; dashed/dotted patterns scale with the
+ *  line's own width so a thick dashed connector doesn't look like a row of tiny
+ *  ticks. Dotted uses a zero-length dash with a round line cap, the standard SVG
+ *  trick for evenly-spaced round dots. */
+function dashArray(lineType: LineType, widthPx: number): string | undefined {
+  if (lineType === 'solid') return undefined
+  if (lineType === 'dashed') return `${widthPx * 4} ${widthPx * 2.5}`
+  return `0 ${widthPx * 2.5}`
+}
+
 interface TreeCanvasProps {
   layout: LayoutResult
   options: LayoutOptions
   adjustments: Adjustments
   onAdjustNode: (path: string, adjustment: NodeAdjustment) => void
   onResetNode: (path: string) => void
-  arrows: MovementArrow[]
+  connectors: Connector[]
+  lineStyles: Map<string, LineStyleSpec>
   arrowAdjustments: ArrowAdjustments
   onAdjustArrow: (id: string, adjustment: NodeAdjustment) => void
   onResetArrow: (id: string) => void
@@ -63,6 +75,8 @@ function LabelText({
       <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fontFamily={FONT_FAMILY}>
         {segments.map((seg, i) => {
           if (seg.script === 'normal') return <tspan key={i}>{seg.text}</tspan>
+          if (seg.script === 'italic') return <tspan key={i} fontStyle="italic">{seg.text}</tspan>
+          if (seg.script === 'bold') return <tspan key={i} fontWeight="bold">{seg.text}</tspan>
           const dy = seg.script === 'sub' ? fontSize * 0.28 : -fontSize * 0.32
           return (
             <tspan key={i} dy={dy} fontSize={fontSize * 0.68}>
@@ -86,11 +100,30 @@ function LabelText({
         cursorX += widths[i]
         if (seg.script === 'math') {
           const math = renderMathToSvg(seg.text, seg.display ?? false, fontSize)
-          return <g key={i} dangerouslySetInnerHTML={{ __html: math.svg }} transform={`translate(${segX}, ${topY})`} />
+          // A short/inline formula (e.g. `$\mathit{v}$` mixed into an otherwise plain
+          // label) needs its own baseline lined up with the surrounding text's
+          // baseline (at `y`), or it visibly floats relative to neighboring plain
+          // text -- `depthPx` (how far MathJax says the glyph extends below its own
+          // baseline) gives us exactly that offset. A genuinely tall formula (roughly,
+          // a whole label that's a multi-row matrix) instead stays top-anchored at
+          // this node's topY, same as before: baseline-aligning it too would push it
+          // upward past topY and risk colliding with the parent row above, which
+          // layout.ts only ever reserves extra room *below* a tall label for.
+          const mathY = math.heightPx <= fontSize * 1.5 ? y - (math.heightPx - math.depthPx) : topY
+          return <g key={i} dangerouslySetInnerHTML={{ __html: math.svg }} transform={`translate(${segX}, ${mathY})`} />
         }
-        if (seg.script === 'normal') {
+        if (seg.script === 'normal' || seg.script === 'italic' || seg.script === 'bold') {
           return (
-            <text key={i} x={segX} y={y} textAnchor="start" fontSize={fontSize} fontFamily={FONT_FAMILY}>
+            <text
+              key={i}
+              x={segX}
+              y={y}
+              textAnchor="start"
+              fontSize={fontSize}
+              fontFamily={FONT_FAMILY}
+              fontStyle={seg.script === 'italic' ? 'italic' : undefined}
+              fontWeight={seg.script === 'bold' ? 'bold' : undefined}
+            >
               {seg.text}
             </text>
           )
@@ -184,7 +217,7 @@ function DraggableNode({
             points={`${pos.x},${g.triangleApexY} ${pos.x - n.width / 2},${g.triangleBaseY} ${pos.x + n.width / 2},${g.triangleBaseY}`}
             fill="none"
             stroke="black"
-            strokeWidth={1.25}
+            strokeWidth={ptToPx(opts.branchWidthPt)}
           />
           {n.node.triangleYield && (
             <LabelText segments={n.node.triangleYield} x={pos.x} y={g.yieldTextY} fontSize={opts.fontSize} opts={opts} />
@@ -233,7 +266,7 @@ function TreeNodeSvg({
             x2={childPos.x}
             y2={nodeGeometry(childPos.y, opts).topY}
             stroke="black"
-            strokeWidth={1.25}
+            strokeWidth={ptToPx(opts.branchWidthPt)}
           />
         )
       })}
@@ -264,35 +297,38 @@ function TreeNodeSvg({
   )
 }
 
-function ArrowPath({
-  arrow,
+function ConnectorPath({
+  connector,
   layout,
   options,
   adjustments,
+  lineStyles,
   arrowAdjustments,
   onAdjustArrow,
   onResetArrow,
   scaleX,
   scaleY,
 }: {
-  arrow: MovementArrow
+  connector: Connector
   layout: LayoutResult
   options: LayoutOptions
   adjustments: Adjustments
+  lineStyles: Map<string, LineStyleSpec>
   arrowAdjustments: ArrowAdjustments
   onAdjustArrow: (id: string, adjustment: NodeAdjustment) => void
   onResetArrow: (id: string) => void
   scaleX: number
   scaleY: number
 }) {
-  const from = arrowAnchor(arrow.fromPath, layout, adjustments, options, scaleX, scaleY)
-  const to = arrowAnchor(arrow.toPath, layout, adjustments, options, scaleX, scaleY)
-  const control = resolveArrowControlPoint(arrow.id, from, to, arrowAdjustments)
+  const from = arrowAnchor(connector.fromPath, layout, adjustments, options, scaleX, scaleY)
+  const to = arrowAnchor(connector.toPath, layout, adjustments, options, scaleX, scaleY)
+  const resolved = resolveLineStyle(connector.tag, lineStyles, options.branchWidthPt)
+  const bend = resolveConnectorBendPoint(connector.id, resolved.shape, from, to, arrowAdjustments)
   const dragState = useRef<{ pointerId: number; startClientX: number; startClientY: number; startAdj: NodeAdjustment } | null>(null)
 
   const handlePointerDown = (e: ReactPointerEvent<SVGCircleElement>) => {
     e.stopPropagation()
-    const current = arrowAdjustments[arrow.id] ?? { dx: 0, dy: 0 }
+    const current = arrowAdjustments[connector.id] ?? { dx: 0, dy: 0 }
     dragState.current = { pointerId: e.pointerId, startClientX: e.clientX, startClientY: e.clientY, startAdj: current }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
@@ -302,25 +338,36 @@ function ArrowPath({
     if (!drag || drag.pointerId !== e.pointerId) return
     const dx = drag.startAdj.dx + (e.clientX - drag.startClientX) / scaleX
     const dy = drag.startAdj.dy + (e.clientY - drag.startClientY) / scaleY
-    onAdjustArrow(arrow.id, { dx, dy })
+    onAdjustArrow(connector.id, { dx, dy })
   }
 
   const handlePointerUp = (e: ReactPointerEvent<SVGCircleElement>) => {
     if (dragState.current?.pointerId === e.pointerId) dragState.current = null
   }
 
+  // A "square" connector is a 3-segment コ-shaped staple: down from `from` to the bus
+  // row (`bend.y`), across to `to`'s x, then up/down to `to` -- only `bend.y` (not
+  // bend.x) is used, since the two corners sit at from.x/to.x, not at the handle.
+  const d =
+    resolved.shape === 'square'
+      ? `M ${from.x},${from.y} L ${from.x},${bend.y} L ${to.x},${bend.y} L ${to.x},${to.y}`
+      : `M ${from.x},${from.y} Q ${bend.x},${bend.y} ${to.x},${to.y}`
+
   return (
     <g>
       <path
-        d={`M ${from.x},${from.y} Q ${control.x},${control.y} ${to.x},${to.y}`}
+        d={d}
         fill="none"
         stroke="black"
-        strokeWidth={1.25}
-        markerEnd="url(#dendrograph-arrowhead)"
+        strokeWidth={resolved.widthPx}
+        strokeDasharray={dashArray(resolved.lineType, resolved.widthPx)}
+        strokeLinecap={resolved.lineType === 'dotted' ? 'round' : undefined}
+        markerStart={resolved.headFrom === 'arrow' ? 'url(#dendrograph-arrowhead)' : undefined}
+        markerEnd={resolved.headTo === 'arrow' ? 'url(#dendrograph-arrowhead)' : undefined}
       />
       <circle
-        cx={control.x}
-        cy={control.y}
+        cx={bend.x}
+        cy={bend.y}
         r={5}
         fill="white"
         stroke="#888"
@@ -331,35 +378,37 @@ function ArrowPath({
         onPointerUp={handlePointerUp}
         onDoubleClick={(e) => {
           e.stopPropagation()
-          onResetArrow(arrow.id)
+          onResetArrow(connector.id)
         }}
       />
     </g>
   )
 }
 
-function ArrowsLayer({
-  arrows,
+function ConnectorsLayer({
+  connectors,
   layout,
   options,
   adjustments,
+  lineStyles,
   arrowAdjustments,
   onAdjustArrow,
   onResetArrow,
   scaleX,
   scaleY,
 }: {
-  arrows: MovementArrow[]
+  connectors: Connector[]
   layout: LayoutResult
   options: LayoutOptions
   adjustments: Adjustments
+  lineStyles: Map<string, LineStyleSpec>
   arrowAdjustments: ArrowAdjustments
   onAdjustArrow: (id: string, adjustment: NodeAdjustment) => void
   onResetArrow: (id: string) => void
   scaleX: number
   scaleY: number
 }) {
-  if (arrows.length === 0) return null
+  if (connectors.length === 0) return null
   return (
     <g>
       <defs>
@@ -375,13 +424,14 @@ function ArrowsLayer({
           <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
         </marker>
       </defs>
-      {arrows.map((arrow) => (
-        <ArrowPath
-          key={arrow.id}
-          arrow={arrow}
+      {connectors.map((connector) => (
+        <ConnectorPath
+          key={connector.id}
+          connector={connector}
           layout={layout}
           options={options}
           adjustments={adjustments}
+          lineStyles={lineStyles}
           arrowAdjustments={arrowAdjustments}
           onAdjustArrow={onAdjustArrow}
           onResetArrow={onResetArrow}
@@ -393,25 +443,27 @@ function ArrowsLayer({
   )
 }
 
-/** Movement-arrow curves can bulge below the tree's own bounding box (their control
- *  point, and by the convex-hull property of Bezier curves the whole curve, never
- *  exceeds the max y of {from, control, to}), so the canvas needs to reserve that
- *  much extra height or the curve gets clipped. */
-export function arrowsMaxY(
-  arrows: MovementArrow[],
+/** A curve's control point or a square connector's corner can sit below the tree's
+ *  own bounding box (and, for a curve, by the convex-hull property of Bezier curves,
+ *  the whole curve never exceeds the max y of {from, bend, to}), so the canvas needs
+ *  to reserve that much extra height or the connector gets clipped. */
+export function connectorsMaxY(
+  connectors: Connector[],
   layout: LayoutResult,
   options: LayoutOptions,
   adjustments: Adjustments,
+  lineStyles: Map<string, LineStyleSpec>,
   arrowAdjustments: ArrowAdjustments,
   scaleX = 1,
   scaleY = 1,
 ): number {
   let maxY = 0
-  for (const arrow of arrows) {
-    const from = arrowAnchor(arrow.fromPath, layout, adjustments, options, scaleX, scaleY)
-    const to = arrowAnchor(arrow.toPath, layout, adjustments, options, scaleX, scaleY)
-    const control = resolveArrowControlPoint(arrow.id, from, to, arrowAdjustments)
-    maxY = Math.max(maxY, from.y, to.y, control.y)
+  for (const connector of connectors) {
+    const from = arrowAnchor(connector.fromPath, layout, adjustments, options, scaleX, scaleY)
+    const to = arrowAnchor(connector.toPath, layout, adjustments, options, scaleX, scaleY)
+    const shape = resolveLineStyle(connector.tag, lineStyles, options.branchWidthPt).shape
+    const bend = resolveConnectorBendPoint(connector.id, shape, from, to, arrowAdjustments)
+    maxY = Math.max(maxY, from.y, to.y, bend.y)
   }
   return maxY
 }
@@ -421,15 +473,19 @@ export function arrowsMaxY(
  *  zoom/pan viewport) without duplicating this math. */
 export function canvasSize(
   layout: LayoutResult,
-  arrows: MovementArrow[],
+  connectors: Connector[],
   options: LayoutOptions,
   adjustments: Adjustments,
+  lineStyles: Map<string, LineStyleSpec>,
   arrowAdjustments: ArrowAdjustments,
   scaleX: number,
   scaleY: number,
   padding = 24,
 ): { width: number; height: number } {
-  const height = Math.max(layout.height * scaleY, arrowsMaxY(arrows, layout, options, adjustments, arrowAdjustments, scaleX, scaleY))
+  const height = Math.max(
+    layout.height * scaleY,
+    connectorsMaxY(connectors, layout, options, adjustments, lineStyles, arrowAdjustments, scaleX, scaleY),
+  )
   return { width: layout.width * scaleX + padding * 2, height: height + padding * 2 }
 }
 
@@ -440,7 +496,8 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
     adjustments,
     onAdjustNode,
     onResetNode,
-    arrows,
+    connectors,
+    lineStyles,
     arrowAdjustments,
     onAdjustArrow,
     onResetArrow,
@@ -450,7 +507,7 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
   },
   ref,
 ) {
-  const { width, height } = canvasSize(layout, arrows, options, adjustments, arrowAdjustments, scaleX, scaleY, padding)
+  const { width, height } = canvasSize(layout, connectors, options, adjustments, lineStyles, arrowAdjustments, scaleX, scaleY, padding)
 
   return (
     <svg
@@ -471,11 +528,12 @@ export const TreeCanvas = forwardRef<SVGSVGElement, TreeCanvasProps>(function Tr
           scaleX={scaleX}
           scaleY={scaleY}
         />
-        <ArrowsLayer
-          arrows={arrows}
+        <ConnectorsLayer
+          connectors={connectors}
           layout={layout}
           options={options}
           adjustments={adjustments}
+          lineStyles={lineStyles}
           arrowAdjustments={arrowAdjustments}
           onAdjustArrow={onAdjustArrow}
           onResetArrow={onResetArrow}

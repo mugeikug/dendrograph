@@ -1,4 +1,4 @@
-export type ScriptStyle = 'normal' | 'sub' | 'sup' | 'math'
+export type ScriptStyle = 'normal' | 'sub' | 'sup' | 'math' | 'italic' | 'bold'
 
 export interface LabelSegment {
   /** For `script: 'math'`, this is raw (unescaped) TeX math source, not display text. */

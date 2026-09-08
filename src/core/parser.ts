@@ -1,4 +1,5 @@
 import type { LabelSegment, TreeNode } from './treeModel'
+import type { ConnectorShape, EndMarker, LineStyleSpec, LineType } from './lineStyle'
 
 export class ParseError extends Error {
   readonly position: number
@@ -12,23 +13,35 @@ export class ParseError extends Error {
 
 const BRACKET_OR_WS = /[\s[\]]/
 
-/** Inline sub/superscript syntax: `_{...}` / `^{...}`, or `_x` / `^x` for a single token.
- *  Applied only to the plain-text portions of a label -- math segments (`$...$`) are
- *  extracted separately, upstream, in `parseLabelSegments`. */
+/** Inline styling for the plain-text portions of a label: `_{...}` / `^{...}` (or `_x`
+ *  / `^x` for a single token) for sub/superscript, and `\it{...}` / `\bf{...}` for
+ *  italic/bold -- all rendered as plain SVG/OOXML text (no MathJax involved), unlike
+ *  `$...$` math segments, which are extracted separately, upstream, in
+ *  `parseLabelSegments`, and never reach this function. `\it{}`/`\bf{}` always require
+ *  the braces (no bare `\it x` shorthand, to keep the command's extent unambiguous),
+ *  and don't compose with `_{}/^{}` in this version -- a span is one script variant at
+ *  a time, not a combination (e.g. no italic subscript). */
 function parseInlineText(raw: string): LabelSegment[] {
   const segments: LabelSegment[] = []
-  const re = /([_^])(\{[^}]*\}|\S+)/g
+  const re = /([_^])(\{[^}]*\}|\S+)|\\(it|bf)\{([^}]*)\}/g
   let last = 0
   let m: RegExpExecArray | null
   while ((m = re.exec(raw))) {
     if (m.index > last) segments.push({ text: raw.slice(last, m.index), script: 'normal' })
-    const marker = m[1]
-    let content = m[2]
-    if (content.startsWith('{') && content.endsWith('}')) {
-      content = content.slice(1, -1)
-    }
-    if (content.length > 0) {
-      segments.push({ text: content, script: marker === '_' ? 'sub' : 'sup' })
+    if (m[1]) {
+      const marker = m[1]
+      let content = m[2]
+      if (content.startsWith('{') && content.endsWith('}')) {
+        content = content.slice(1, -1)
+      }
+      if (content.length > 0) {
+        segments.push({ text: content, script: marker === '_' ? 'sub' : 'sup' })
+      }
+    } else {
+      const content = m[4]
+      if (content.length > 0) {
+        segments.push({ text: content, script: m[3] === 'it' ? 'italic' : 'bold' })
+      }
     }
     last = re.lastIndex
   }
@@ -313,6 +326,43 @@ function parseNode(s: ParserState, path: string): TreeNode {
   return { path, label, children, isTriangle: false, arrowTag }
 }
 
+// `\linestyle[shape, headTo, headFrom, width, lineType]{tag}` -- written after the
+// tree to override a `~tag` connector's look (see `parseLineStyles`). Matched with the
+// sticky flag so `readLineStyleDirectiveAt` can check "does one start exactly here".
+const LINESTYLE_RE = /\\linestyle\s*\[\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*([\d.]+)\s*pt\s*,\s*(\w+)\s*\]\s*\{([^}]*)\}/y
+
+const SHAPES: ConnectorShape[] = ['curve', 'square']
+const END_MARKERS: EndMarker[] = ['arrow', 'none']
+const LINE_TYPES: LineType[] = ['solid', 'dashed', 'dotted']
+
+function assertOneOf<T extends string>(value: string, allowed: readonly T[], what: string, position: number): T {
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw new ParseError(`\\linestyle の${what}は ${allowed.join(' / ')} のいずれかである必要があります: "${value}"`, position)
+  }
+  return value as T
+}
+
+/** Reads one `\linestyle[...]{...}` directive starting exactly at `s.pos`, if there is
+ *  one; returns its parsed spec + tag and advances `s.pos` past it. Returns `null`
+ *  (without moving `s.pos`) if there isn't one here -- used both to validate/skip the
+ *  directives after the tree in `parseTree`, and to collect them in `parseLineStyles`. */
+function readLineStyleDirectiveAt(s: ParserState): { tag: string; spec: LineStyleSpec } | null {
+  LINESTYLE_RE.lastIndex = s.pos
+  const m = LINESTYLE_RE.exec(s.input)
+  if (!m) return null
+  const start = s.pos
+  const [, shapeStr, headToStr, headFromStr, widthStr, lineTypeStr, tag] = m
+  const spec: LineStyleSpec = {
+    shape: assertOneOf(shapeStr, SHAPES, '形状(1番目)', start),
+    headTo: assertOneOf(headToStr, END_MARKERS, 'to側マーカー(2番目)', start),
+    headFrom: assertOneOf(headFromStr, END_MARKERS, 'from側マーカー(3番目)', start),
+    widthPt: Number.parseFloat(widthStr),
+    lineType: assertOneOf(lineTypeStr, LINE_TYPES, '線種(5番目)', start),
+  }
+  s.pos = LINESTYLE_RE.lastIndex
+  return { tag, spec }
+}
+
 export function parseTree(input: string): TreeNode {
   const s: ParserState = { input, pos: 0 }
   skipWs(s)
@@ -321,8 +371,35 @@ export function parseTree(input: string): TreeNode {
   }
   const node = parseNode(s, '0')
   skipWs(s)
+  // Zero or more \linestyle directives may follow the tree -- validated (so a typo
+  // still errors here) but otherwise ignored; `parseLineStyles` does the real
+  // extraction. Kept as a separate pass so callers that only need the tree (most
+  // existing call sites, and every pre-Phase-7 test) don't have to change.
+  while (readLineStyleDirectiveAt(s)) {
+    skipWs(s)
+  }
   if (s.pos < s.input.length) {
     throw new ParseError(`余分な文字があります: "${s.input.slice(s.pos, s.pos + 20)}"`, s.pos)
   }
   return node
+}
+
+/** Collects every `\linestyle[...]{tag}` directive in `input` into a tag -> spec map.
+ *  Scans the whole string independently of tree structure (directives are only ever
+ *  meaningful after the tree, but nothing stops a literal-minded scan from finding one
+ *  anywhere) -- simpler than threading parser state between this and `parseTree`, and
+ *  in practice `\linestyle[...]` never occurs inside real label text. Later directives
+ *  for the same tag overwrite earlier ones. */
+export function parseLineStyles(input: string): Map<string, LineStyleSpec> {
+  const styles = new Map<string, LineStyleSpec>()
+  const s: ParserState = { input, pos: 0 }
+  while (s.pos < input.length) {
+    const found = readLineStyleDirectiveAt(s)
+    if (found) {
+      styles.set(found.tag, found.spec)
+    } else {
+      s.pos++
+    }
+  }
+  return styles
 }

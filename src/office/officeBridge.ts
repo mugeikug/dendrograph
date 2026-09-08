@@ -61,6 +61,7 @@ export interface EditorState {
   adjustments: Record<string, { dx: number; dy: number }>
   arrowAdjustments: Record<string, { dx: number; dy: number }>
   aspectScale: { x: number; y: number }
+  branchWidthPt: number
 }
 
 export function isDialogWindow(): boolean {
@@ -101,6 +102,7 @@ export function openEditorDialog(state: EditorState, onApply: (state: EditorStat
           adjustments: message.adjustments as EditorState['adjustments'],
           arrowAdjustments: (message.arrowAdjustments as EditorState['arrowAdjustments']) ?? {},
           aspectScale: (message.aspectScale as EditorState['aspectScale']) ?? { x: 1, y: 1 },
+          branchWidthPt: (message.branchWidthPt as EditorState['branchWidthPt']) ?? 1,
         })
         dialog.close()
       }

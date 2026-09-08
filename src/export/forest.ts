@@ -20,6 +20,8 @@ function segmentsToLatex(segments: LabelSegment[] | undefined): string {
       const text = escapeForestText(seg.text)
       if (seg.script === 'sub') return `$_{\\text{${text}}}$`
       if (seg.script === 'sup') return `$^{\\text{${text}}}$`
+      if (seg.script === 'italic') return `\\textit{${text}}`
+      if (seg.script === 'bold') return `\\textbf{${text}}`
       return text
     })
     .join('')

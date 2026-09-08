@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ParseError, parseTree } from './parser'
+import { ParseError, parseLineStyles, parseTree } from './parser'
 import { plainText } from './treeModel'
 
 describe('parseTree', () => {
@@ -263,6 +263,91 @@ describe('parseTree', () => {
         { text: 'x', script: 'math', display: false },
         { text: ' and ', script: 'normal' },
         { text: 'y', script: 'math', display: false },
+      ])
+    })
+  })
+
+  describe('\\linestyle directives', () => {
+    it('does not error when a valid \\linestyle directive follows the tree', () => {
+      const tree = parseTree('[CP What~1 [C\' C t~1]]\n\\linestyle[curve, arrow, none, 0.5pt, dotted]{1}')
+      expect(plainText(tree.label)).toBe('CP')
+    })
+
+    it('accepts multiple directives, separated by whitespace', () => {
+      const tree = parseTree(
+        '[S a~1 b~1 c~2 d~2]\n\\linestyle[curve, arrow, none, 0.5pt, dotted]{1}\n\\linestyle[square, none, none, 1pt, solid]{2}',
+      )
+      expect(plainText(tree.label)).toBe('S')
+    })
+
+    it('rejects an invalid shape/marker/lineType with a ParseError', () => {
+      expect(() => parseTree('[S a~1 b~1]\n\\linestyle[triangle, arrow, none, 0.5pt, dotted]{1}')).toThrow(ParseError)
+      expect(() => parseTree('[S a~1 b~1]\n\\linestyle[curve, big, none, 0.5pt, dotted]{1}')).toThrow(ParseError)
+      expect(() => parseTree('[S a~1 b~1]\n\\linestyle[curve, arrow, none, 0.5pt, dashdot]{1}')).toThrow(ParseError)
+    })
+
+    it('still errors on genuinely unrelated trailing garbage', () => {
+      expect(() => parseTree('[S a] garbage')).toThrow(ParseError)
+    })
+  })
+
+  describe('parseLineStyles', () => {
+    it('parses shape/markers/width/lineType and the tag', () => {
+      const styles = parseLineStyles('[S a~1 b~1]\n\\linestyle[square, none, arrow, 1.5pt, dashed]{1}')
+      expect(styles.get('1')).toEqual({ shape: 'square', headTo: 'none', headFrom: 'arrow', widthPt: 1.5, lineType: 'dashed' })
+    })
+
+    it('returns an empty map when there are no directives', () => {
+      expect(parseLineStyles('[S a b]').size).toBe(0)
+    })
+
+    it('collects multiple tags into separate entries', () => {
+      const styles = parseLineStyles(
+        '[S a~1 b~1 c~2 d~2]\n\\linestyle[curve, arrow, none, 0.5pt, dotted]{1}\n\\linestyle[square, none, none, 1pt, solid]{2}',
+      )
+      expect(styles.size).toBe(2)
+      expect(styles.get('1')?.shape).toBe('curve')
+      expect(styles.get('2')?.shape).toBe('square')
+    })
+
+    it('a later directive for the same tag overwrites an earlier one', () => {
+      const styles = parseLineStyles(
+        '[S a~1 b~1]\n\\linestyle[curve, arrow, none, 0.5pt, dotted]{1}\n\\linestyle[square, none, none, 1pt, solid]{1}',
+      )
+      expect(styles.get('1')?.shape).toBe('square')
+    })
+  })
+
+  describe('\\it{} / \\bf{} inline styling', () => {
+    it('extracts \\it{...} as an italic segment', () => {
+      const tree = parseTree('[\\it{John}]')
+      expect(tree.label).toEqual([{ text: 'John', script: 'italic' }])
+    })
+
+    it('extracts \\bf{...} as a bold segment', () => {
+      const tree = parseTree('[\\bf{John}]')
+      expect(tree.label).toEqual([{ text: 'John', script: 'bold' }])
+    })
+
+    it('requires no $ delimiter -- works directly in plain label text', () => {
+      const tree = parseTree('[{a \\it{very} old man}]')
+      expect(tree.label).toEqual([
+        { text: 'a ', script: 'normal' },
+        { text: 'very', script: 'italic' },
+        { text: ' old man', script: 'normal' },
+      ])
+    })
+
+    it('applies to bare leaf words', () => {
+      const tree = parseTree('[VP \\it{loves}]')
+      expect(tree.children[0].label).toEqual([{ text: 'loves', script: 'italic' }])
+    })
+
+    it('drops an empty \\it{}/\\bf{} (leaving the surrounding text as adjacent normal segments)', () => {
+      const tree = parseTree('[{a\\it{}b}]')
+      expect(tree.label).toEqual([
+        { text: 'a', script: 'normal' },
+        { text: 'b', script: 'normal' },
       ])
     })
   })

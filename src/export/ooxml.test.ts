@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseTree } from '../core/parser'
+import { parseTree, parseLineStyles } from '../core/parser'
 import { defaultLayoutOptions, layoutTree } from '../core/layout'
 import { approximateMeasureText } from '../core/textWidth'
-import { detectMovementArrows } from '../core/movement'
+import { detectConnectors } from '../core/movement'
 import { layoutToOoxml } from './ooxml'
 
 const opts = { ...defaultLayoutOptions, measureText: approximateMeasureText }
@@ -87,7 +87,7 @@ describe('layoutToOoxml', () => {
       const tree = parseTree('[S [NP△ the man] [VP runs]]')
       const layout = layoutTree(tree, opts)
       const unscaled = layoutToOoxml(layout, opts, {})
-      const scaled = layoutToOoxml(layout, opts, {}, [], {}, { scaleX: 1, scaleY: 2 })
+      const scaled = layoutToOoxml(layout, opts, {}, [], new Map(), {}, { scaleX: 1, scaleY: 2 })
 
       // The overall group grows taller (positions moved further apart)...
       const groupHeight = (xml: string) => Number(xml.match(/<wp:extent cx="\d+" cy="(\d+)"\/>/)![1])
@@ -104,15 +104,15 @@ describe('layoutToOoxml', () => {
     })
   })
 
-  describe('movement arrows', () => {
-    it('adds one custGeom shape per arrow, with a triangle arrowhead', () => {
+  describe('movement arrows / connectors', () => {
+    it('adds one custGeom shape per connector, with a triangle arrowhead', () => {
       const tree = parseTree("[CP What~1 [C' C [IP you [I' did [VP see t~1]]]]]")
       const layout = layoutTree(tree, opts)
-      const arrows = detectMovementArrows(tree)
-      expect(arrows).toHaveLength(1)
+      const connectors = detectConnectors(tree)
+      expect(connectors).toHaveLength(1)
 
       const withoutArrows = layoutToOoxml(layout, opts, {})
-      const withArrows = layoutToOoxml(layout, opts, {}, arrows, {})
+      const withArrows = layoutToOoxml(layout, opts, {}, connectors, new Map())
 
       expect(countOccurrences(withArrows, '<wps:wsp>')).toBe(countOccurrences(withoutArrows, '<wps:wsp>') + 1)
       expect(withArrows).toContain('<a:custGeom>')
@@ -123,20 +123,62 @@ describe('layoutToOoxml', () => {
     it('applies an arrow adjustment to the generated curve', () => {
       const tree = parseTree('[S a~1 b~1]')
       const layout = layoutTree(tree, opts)
-      const arrows = detectMovementArrows(tree)
-      const withoutAdjust = layoutToOoxml(layout, opts, {}, arrows, {})
-      const withAdjust = layoutToOoxml(layout, opts, {}, arrows, { [arrows[0].id]: { dx: 0, dy: 300 } })
+      const connectors = detectConnectors(tree)
+      const withoutAdjust = layoutToOoxml(layout, opts, {}, connectors, new Map())
+      const withAdjust = layoutToOoxml(layout, opts, {}, connectors, new Map(), { [connectors[0].id]: { dx: 0, dy: 300 } })
       expect(withAdjust).not.toBe(withoutAdjust)
     })
 
     it('produces well-formed custGeom/path tags even with an arrow present', () => {
       const tree = parseTree("[CP What~1 [C' C [IP you [I' did [VP see t~1]]]]]")
       const layout = layoutTree(tree, opts)
-      const arrows = detectMovementArrows(tree)
-      const xml = layoutToOoxml(layout, opts, {}, arrows, {})
+      const connectors = detectConnectors(tree)
+      const xml = layoutToOoxml(layout, opts, {}, connectors, new Map())
       for (const tag of ['wps:wsp', 'a:custGeom', 'a:path', 'a:moveTo', 'a:quadBezTo', 'a:ln']) {
         expect(countOpenTags(xml, tag)).toBe(countOccurrences(xml, `</${tag}>`))
       }
+    })
+
+    it('supports a chain of 3+ same-tagged nodes as multiple connector shapes', () => {
+      const tree = parseTree('[S [A a~1] [B b~1] [C c~1]]')
+      const connectors = detectConnectors(tree)
+      expect(connectors).toHaveLength(2)
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {}, connectors, new Map())
+      expect(countOccurrences(xml, '<a:custGeom>')).toBe(2)
+    })
+
+    it('renders a "square" \\linestyle as a 3-segment コ-shaped staple with no arrowheads by default heads=none', () => {
+      const tree = parseTree('[S a~1 b~1]\n\\linestyle[square, none, none, 1pt, solid]{1}')
+      const connectors = detectConnectors(tree)
+      const lineStyles = parseLineStyles('[S a~1 b~1]\n\\linestyle[square, none, none, 1pt, solid]{1}')
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {}, connectors, lineStyles)
+      expect(xml).not.toContain('<a:quadBezTo>')
+      expect(countOccurrences(xml, '<a:lnTo>')).toBe(3)
+      expect(xml).toContain('a:headEnd type="none"')
+      expect(xml).toContain('a:tailEnd type="none"')
+    })
+
+    it('applies a custom width and dashed line type from \\linestyle', () => {
+      const source = '[S a~1 b~1]\n\\linestyle[curve, arrow, none, 3pt, dashed]{1}'
+      const connectors = detectConnectors(parseTree(source))
+      const lineStyles = parseLineStyles(source)
+      const layout = layoutTree(parseTree(source), opts)
+      const xml = layoutToOoxml(layout, opts, {}, connectors, lineStyles)
+      expect(xml).toContain('<a:prstDash val="dash"/>')
+      // 3pt -> px -> EMU should noticeably exceed the ~1pt default branch width.
+      const lnWidths = [...xml.matchAll(/<a:ln w="(\d+)">/g)].map((m) => Number(m[1]))
+      expect(Math.max(...lnWidths)).toBeGreaterThan(lnWidths[0] * 2)
+    })
+
+    it('falls back to the tree\'s branch width when no \\linestyle is given for a tag', () => {
+      const tree = parseTree('[S a~1 b~1]')
+      const connectors = detectConnectors(tree)
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {}, connectors, new Map())
+      const branchWidthEmu = Math.round((opts.branchWidthPt / (3 / 4)) * 9525)
+      expect(xml).toContain(`<a:ln w="${branchWidthEmu}">`)
     })
   })
 
@@ -176,6 +218,31 @@ describe('layoutToOoxml', () => {
       for (const tag of ['wps:wsp', 'm:oMath', 'm:d', 'm:m', 'm:mr', 'w:p']) {
         expect(countOpenTags(xml, tag)).toBe(countOccurrences(xml, `</${tag}>`))
       }
+    })
+  })
+
+  describe('\\it{} / \\bf{} inline styling', () => {
+    it('renders an italic segment with <w:i/>', () => {
+      const tree = parseTree('[\\it{John}]')
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {})
+      expect(xml).toContain('<w:i/>')
+      expect(xml).toContain('John')
+    })
+
+    it('renders a bold segment with <w:b/>', () => {
+      const tree = parseTree('[\\bf{John}]')
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {})
+      expect(xml).toContain('<w:b/>')
+    })
+
+    it('does not add <w:i/>/<w:b/> to a plain label', () => {
+      const tree = parseTree('[John]')
+      const layout = layoutTree(tree, opts)
+      const xml = layoutToOoxml(layout, opts, {})
+      expect(xml).not.toContain('<w:i/>')
+      expect(xml).not.toContain('<w:b/>')
     })
   })
 })

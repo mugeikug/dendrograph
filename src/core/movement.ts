@@ -1,30 +1,39 @@
 import type { TreeNode } from './treeModel'
 
-export interface MovementArrow {
+export interface Connector {
   id: string
-  /** The tail of the arrow (arrow starts here) -- the deeper of the two tagged nodes. */
+  /** The tail of the connector (line starts here) -- see the ordering note below. */
   fromPath: string
-  /** The head/arrowhead of the arrow -- the shallower of the two tagged nodes. */
+  /** The head of the connector -- see the ordering note below. */
   toPath: string
+  /** The `~tag` this connector came from, used to look up its `\linestyle` (see
+   *  core/lineStyle.ts) -- multiple connectors from a chain of 3+ same-tagged nodes
+   *  all share the one tag's style. */
+  tag: string
 }
 
 interface TaggedNode {
   node: TreeNode
   depth: number
-  /** Pre-order traversal index, used only to break ties when both tagged nodes are
-   *  at the same depth. */
+  /** Pre-order traversal index, used only to break ties when tagged nodes are at the
+   *  same depth. */
   order: number
 }
 
-/** Finds pairs of nodes sharing the same `arrowTag` (`~tag` in the notation) and
- *  returns one MovementArrow per pair. A tag shared by anything other than exactly
- *  two nodes is ignored (no arrow, no error) -- ambiguous chains are out of scope.
+/** Finds every `~tag` shared by 2 or more nodes and returns one `Connector` per
+ *  adjacent pair in the chain (a tag shared by exactly 2 nodes -> 1 connector; by 3
+ *  -> 2 connectors linking node1-node2 and node2-node3; and so on). A tag used by only
+ *  1 node produces no connector.
  *
- *  Direction: the deeper node is the source (arrow tail, typically a trace) and the
- *  shallower node is the target (arrowhead, typically the moved antecedent). When
- *  both are at the same depth, the later-occurring node (in the notation's left-to-
- *  right order) is the source and the earlier one is the target. */
-export function detectMovementArrows(tree: TreeNode): MovementArrow[] {
+ *  Ordering (source -> target) within the chain, and thus which end is `fromPath` vs
+ *  `toPath`: nodes are sorted deepest-first (ties broken by later notation order first
+ *  -- see the movement direction convention below), then connectors link each node to
+ *  the next in that sorted sequence. For a plain 2-node movement pair this reproduces
+ *  the original trace -> antecedent convention: the deeper node (typically a trace) is
+ *  the source and the shallower node (typically the moved antecedent) is the target.
+ *  For a 3+ node successive-cyclic chain, this naturally links the deepest trace up to
+ *  each intermediate trace in turn, ending at the antecedent. */
+export function detectConnectors(tree: TreeNode): Connector[] {
   const byTag = new Map<string, TaggedNode[]>()
   let order = 0
 
@@ -39,14 +48,15 @@ export function detectMovementArrows(tree: TreeNode): MovementArrow[] {
   }
   walk(tree, 0)
 
-  const arrows: MovementArrow[] = []
-  for (const nodes of byTag.values()) {
-    if (nodes.length !== 2) continue
-    const [a, b] = nodes
-    const aIsSource = a.depth !== b.depth ? a.depth > b.depth : a.order > b.order
-    const from = aIsSource ? a : b
-    const to = aIsSource ? b : a
-    arrows.push({ id: `${from.node.path}->${to.node.path}`, fromPath: from.node.path, toPath: to.node.path })
+  const connectors: Connector[] = []
+  for (const [tag, nodes] of byTag) {
+    if (nodes.length < 2) continue
+    const sorted = [...nodes].sort((a, b) => (a.depth !== b.depth ? b.depth - a.depth : b.order - a.order))
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const from = sorted[i]
+      const to = sorted[i + 1]
+      connectors.push({ id: `${from.node.path}->${to.node.path}`, fromPath: from.node.path, toPath: to.node.path, tag })
+    }
   }
-  return arrows
+  return connectors
 }
