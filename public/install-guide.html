@@ -151,9 +151,13 @@
 
   .path-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 18px;
     margin-bottom: 56px;
+  }
+
+  @media (max-width: 860px) {
+    .path-grid { grid-template-columns: 1fr 1fr; }
   }
 
   @media (max-width: 620px) {
@@ -222,6 +226,11 @@
 
   .path-card.b { border-color: var(--pine); }
   .path-card.b .tag { color: var(--pine-strong); }
+
+  .path-card.c { border-color: var(--amber-line); }
+  .path-card.c .tag { color: var(--amber); }
+  .path-card.c a.cta { color: var(--amber); border-bottom-color: var(--amber-line); }
+  .path-card.c a.cta:hover { color: var(--amber); opacity: 0.85; }
 
   /* ---------- section headers ---------- */
 
@@ -395,7 +404,7 @@
   </header>
 
   <p class="lede">
-    使い方には2つの経路があります。<strong>まずはブラウザ版</strong>で試して感触を掴み、Wordへのネイティブ挿入も使いたくなったら<strong>アドインの導入</strong>に進む、という順番がおすすめです。アドイン導入は初回のみ少し手間がかかりますが、一度設定すれば以降はワンクリックで挿入できます。
+    使い方には3つの経路があります。<strong>まずはブラウザ版</strong>で試して感触を掴み、Wordへのネイティブ挿入も使いたくなったら<strong>アドインの導入</strong>に進む、という順番がおすすめです。アドインには<strong>2種類</strong>あり、ネット接続の有無で選んでください(詳しくは下の比較を参照)。どちらも導入は初回のみ少し手間がかかりますが、一度設定すれば以降はワンクリックで挿入できます。
   </p>
 
   <div class="path-grid">
@@ -411,21 +420,40 @@
       <a class="cta" href="https://mugeikug.github.io/dendrograph/" target="_blank" rel="noopener">アプリを開く →</a>
     </div>
     <div class="path-card b">
-      <p class="tag">Path B — フル機能</p>
+      <p class="tag">Path B — オンライン版</p>
       <h2>Word アドイン</h2>
-      <p>Wordのタスクペインから、編集可能な図形として文書に直接挿入できるようになります。初回のみ下記の設定が必要です。</p>
+      <p>Wordのタスクペインから、編集可能な図形として文書に直接挿入できます。使用のたびにネット接続が必要です。</p>
       <ul>
-        <li>Wordに樹形図をそのまま挿入</li>
+        <li>導入はPath Cよりシンプル</li>
         <li>挿入後も個別の図形として微調整可能</li>
-        <li>設定は一度だけでOK</li>
+        <li>タスクペインを開く際にネット接続が必要</li>
       </ul>
-      <a class="cta" href="#setup">下の手順に進む ↓</a>
+      <a class="cta" href="#setup-online">下の手順に進む ↓</a>
+    </div>
+    <div class="path-card c">
+      <p class="tag">Path C — オフライン版</p>
+      <h2>Word アドイン(VSTO)</h2>
+      <p>インストール後は完全にオフラインで動作します。機内・出張先など、ネット接続が不安定な環境におすすめです。</p>
+      <ul>
+        <li>使用時にネット接続は一切不要</li>
+        <li>導入時に1回だけセキュリティ警告の許可が必要</li>
+        <li>Wordへの挿入・編集機能はPath Bと同等</li>
+      </ul>
+      <a class="cta" href="#setup-offline">下の手順に進む ↓</a>
     </div>
   </div>
 
-  <section class="steps" id="setup">
+  <div class="callout" style="margin: -24px 0 56px;">
+    <div class="head">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M10 6.5v4M10 13.2h.01M2.5 16.5h15L10 2.8 2.5 16.5Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Path B と Path C、どちらを選べばいい?
+    </div>
+    機能はまったく同じです。<strong>研究室や自宅など、安定したネット環境でいつも使う</strong>のであれば導入が簡単なPath B(オンライン版)で十分です。<strong>出張先・学会・機内など、ネットが使えない/不安定な場所でも使いたい</strong>場合はPath C(オフライン版)を選んでください。両方同時に入れても問題ありません。
+  </div>
+
+  <section class="steps" id="setup-online">
     <div class="section-head">
-      <h2>Wordアドインの設定</h2>
+      <h2>Wordアドイン(オンライン版)の設定</h2>
       <span class="sub">所要時間: 約10分・初回のみ</span>
     </div>
 
@@ -504,6 +532,63 @@
     </div>
   </section>
 
+  <section class="steps" id="setup-offline">
+    <div class="section-head">
+      <h2>Wordアドイン(オフライン版)の設定</h2>
+      <span class="sub">所要時間: 約5分・初回のみ(ダウンロード・インストール自体はネット接続が必要です)</span>
+    </div>
+
+    <div class="step">
+      <div class="num">1</div>
+      <div>
+        <h3>インストーラーをダウンロードして実行する</h3>
+        <ol class="sub">
+          <li><a href="https://mugeikug.github.io/dendrograph/vsto/setup.exe" target="_blank" rel="noopener">setup.exe</a> をダウンロードする</li>
+          <li>ダウンロードしたファイルをダブルクリックして実行する</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">2</div>
+      <div>
+        <h3>セキュリティの警告が出たら許可する</h3>
+        <p style="margin:0 0 10px; font-size:14.5px; color:var(--ink-soft);">個人配布のツールのため、Windowsが2種類の警告を表示することがあります。いずれも内容を確認した上でお使いください。</p>
+        <ol class="sub">
+          <li>「Windows によって PC が保護されました」と表示された場合 →「詳細情報」をクリック →「実行」をクリック</li>
+          <li>「発行元を確認できませんでした。このソフトウェアをインストールしますか?」と表示された場合 →「インストール」をクリック</li>
+        </ol>
+        <div class="callout">
+          <div class="head">
+            <svg viewBox="0 0 20 20" fill="none"><path d="M10 6.5v4M10 13.2h.01M2.5 16.5h15L10 2.8 2.5 16.5Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            これらの警告は何?
+          </div>
+          正式な商用証明書を購入していない小規模配布のツールに共通して出るもので、Dendrograph固有の問題ではありません。配布元(このページ)からそのままダウンロードしたファイルであれば問題ありません。
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">3</div>
+      <div>
+        <h3>必要なコンポーネントが自動インストールされる</h3>
+        <p class="note" style="margin-top:0;">.NET FrameworkやVSTO Runtimeが未導入の場合、ここで自動的にダウンロード・インストールされます。環境によっては数分かかります。すでに入っている場合はこの画面は出ずに次に進みます。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">4</div>
+      <div>
+        <h3>Wordで確認する</h3>
+        <ol class="sub">
+          <li>インストール完了後、Wordが自動的に起動します(起動しない場合は手動でWordを開いてください)</li>
+          <li>リボンに「Dendrograph」タブが表示されていれば設定完了です</li>
+        </ol>
+        <p class="note">このアドインは以降、インターネット接続なしで動作します。「樹形図を挿入」ボタンからタスクペインを開いてご利用ください。</p>
+      </div>
+    </div>
+  </section>
+
   <div class="section-head">
     <h2>うまくいかないときは</h2>
   </div>
@@ -521,6 +606,16 @@
   <div class="faq-item">
     <h3>「共有」タブも管理者共有も使えない</h3>
     <p>Windows Home エディションなど、環境によってはどちらの方法も使えないことがあります。その場合は Path A のブラウザ版をご利用いただくか、ご相談ください。</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>(オフライン版)インストール後もリボンに「Dendrograph」タブが出ない</h3>
+    <p>Wordを一度完全に閉じて再度開いてみてください。それでも出ない場合、「ファイル」→「オプション」→「アドイン」の一覧に「Dendrograph」が表示されているか確認してください。「無効なアイテム」に入っている場合は選択して「有効化」してください。</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>(オフライン版)新しいバージョンが出たらどうすればいい?</h3>
+    <p>オフライン版は自動更新を行わない設定にしてあります(オフラインでも起動時に待たされないようにするためです)。新しいバージョンが出た際は、改めてこのページの <code>setup.exe</code> から再インストールしてください。</p>
   </div>
 
   <footer>
