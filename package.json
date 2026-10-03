@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "npm run build && node -e \"require('fs').copyFileSync('addin/manifest.xml','dist/manifest.xml')\" && gh-pages -d dist"
+    "deploy": "npm run build && node -e \"require('fs').copyFileSync('addin/manifest.xml','dist/manifest.xml')\" && gh-pages -d dist",
+    "build:vsto": "tsc -b && vite build --base / --outDir dist-vsto",
+    "sync:vsto": "npm run build:vsto && node -e \"require('fs').cpSync('dist-vsto','vsto/DendrographAddIn/WebAppContent',{recursive:true})\""
   },
   "dependencies": {
     "@mathjax/src": "^4.1.3",

@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-vsto
+dist-vsto-spike
 *.local
 *.tsbuildinfo
 .env
@@ -20,8 +22,16 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
+
+# VSTO add-in (vsto/DendrographAddIn/DendrographAddIn.csproj and .sln ARE committed)
+vsto/**/WebAppContent/
+vsto/**/bin/
+vsto/**/obj/
+vsto/**/*.publish/
+vsto/**/.vs/
+*.suo
+*.user
+*.pfx

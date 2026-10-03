@@ -11,19 +11,21 @@ import { copyPngToClipboard, downloadPng, downloadSvg } from './export/imageExpo
 import { layoutToOoxml } from './export/ooxml'
 import { treeToForestCode } from './export/forest'
 import { openLibraryFile, saveLibraryAsNewFile, type LibraryFileHandle } from './export/libraryFile'
+import { applyAndCloseDialog, detectWordHost, insertOoxmlIntoWord as insertOoxmlIntoWordOfficeJs, openEditorDialog } from './office/officeBridge'
+import { isDialogWindow, readInitialStateFromUrl } from './office/dialogState'
 import {
-  applyAndCloseDialog,
-  detectWordHost,
-  insertOoxmlIntoWord,
-  isDialogWindow,
-  openEditorDialog,
-  readInitialStateFromUrl,
-} from './office/officeBridge'
+  applyAndCloseEditorWindow,
+  detectVstoHost,
+  insertOoxmlIntoWord as insertOoxmlIntoWordVsto,
+  openEditorWindow,
+} from './office/vstoBridge'
 import './App.css'
 
 const SAMPLE = `[S [NP△ the very old man] [VP [V saw] [NP a_{1} dog^{*}]]]`
 
 const isDialog = isDialogWindow()
+const isVsto = detectVstoHost()
+type HostKind = 'officejs' | 'vsto' | 'browser'
 
 function makeInitialState(): { library: TreeLibrary; activeId: string } {
   if (isDialog) {
@@ -44,14 +46,21 @@ function App() {
   const [fileHandle, setFileHandle] = useState<LibraryFileHandle | null>(null)
   const [libraryStatus, setLibraryStatus] = useState<string | null>(null)
   const [copyStatus, setCopyStatus] = useState<string | null>(null)
-  const [isWordHost, setIsWordHost] = useState(false)
+  const [hostKind, setHostKind] = useState<HostKind>('browser')
   const [insertStatus, setInsertStatus] = useState<string | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
 
   const activeEntry = library.entries.find((e) => e.id === activeId) ?? library.entries[0]
 
   useEffect(() => {
-    detectWordHost().then(setIsWordHost)
+    // The VSTO host is detected synchronously from the virtual-host URL, so there's no need
+    // to also try office.js's detectWordHost() -- doing so would load office.js from the
+    // Microsoft CDN for nothing, defeating the VSTO edition's whole point of working offline.
+    if (isVsto) {
+      setHostKind('vsto')
+      return
+    }
+    detectWordHost().then((isWord) => setHostKind(isWord ? 'officejs' : 'browser'))
   }, [])
 
   const { tree, layout, options, lineStyles, error } = useMemo(() => {
@@ -175,7 +184,11 @@ function App() {
         scaleX: activeEntry.aspectScale.x,
         scaleY: activeEntry.aspectScale.y,
       })
-      await insertOoxmlIntoWord(ooxml)
+      if (hostKind === 'vsto') {
+        await insertOoxmlIntoWordVsto(ooxml)
+      } else {
+        await insertOoxmlIntoWordOfficeJs(ooxml)
+      }
       setInsertStatus('Wordに挿入しました。図形を選択して「グループ解除」すると個別に編集できます。')
     } catch (e) {
       setInsertStatus(`挿入に失敗しました: ${String(e)}`)
@@ -183,34 +196,42 @@ function App() {
   }
 
   const handleOpenEditor = () => {
-    openEditorDialog(
-      {
-        input: activeEntry.input,
-        adjustments: activeEntry.adjustments,
-        arrowAdjustments: activeEntry.arrowAdjustments,
-        aspectScale: activeEntry.aspectScale,
-        branchWidthPt: activeEntry.branchWidthPt,
-      },
-      (state) => {
-        updateActiveEntry({
-          input: state.input,
-          adjustments: state.adjustments,
-          arrowAdjustments: state.arrowAdjustments,
-          aspectScale: state.aspectScale,
-          branchWidthPt: state.branchWidthPt,
-        })
-      },
-    )
-  }
-
-  const handleApplyFromDialog = () => {
-    applyAndCloseDialog({
+    const state = {
       input: activeEntry.input,
       adjustments: activeEntry.adjustments,
       arrowAdjustments: activeEntry.arrowAdjustments,
       aspectScale: activeEntry.aspectScale,
       branchWidthPt: activeEntry.branchWidthPt,
-    })
+    }
+    const onApply = (applied: typeof state) => {
+      updateActiveEntry({
+        input: applied.input,
+        adjustments: applied.adjustments,
+        arrowAdjustments: applied.arrowAdjustments,
+        aspectScale: applied.aspectScale,
+        branchWidthPt: applied.branchWidthPt,
+      })
+    }
+    if (hostKind === 'vsto') {
+      openEditorWindow(state, onApply)
+    } else {
+      openEditorDialog(state, onApply)
+    }
+  }
+
+  const handleApplyFromDialog = () => {
+    const state = {
+      input: activeEntry.input,
+      adjustments: activeEntry.adjustments,
+      arrowAdjustments: activeEntry.arrowAdjustments,
+      aspectScale: activeEntry.aspectScale,
+      branchWidthPt: activeEntry.branchWidthPt,
+    }
+    if (isVsto) {
+      applyAndCloseEditorWindow(state)
+    } else {
+      applyAndCloseDialog(state)
+    }
   }
 
   const handleSaveLibrary = async () => {
@@ -385,12 +406,12 @@ function App() {
               </button>
             ) : (
               <>
-                {isWordHost && (
+                {hostKind !== 'browser' && (
                   <button type="button" onClick={handleInsertIntoWord} disabled={!layout}>
                     Wordに挿入
                   </button>
                 )}
-                {isWordHost && (
+                {hostKind !== 'browser' && (
                   <button type="button" onClick={handleOpenEditor}>
                     大きな画面で編集
                   </button>

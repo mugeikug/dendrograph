@@ -1,3 +1,7 @@
+import { buildDialogUrl, type EditorState } from './dialogState'
+
+export { isDialogWindow, readInitialStateFromUrl, type EditorState } from './dialogState'
+
 const OFFICE_JS_URL = 'https://appsforoffice.microsoft.com/lib/1/hosted/office.js'
 
 let officeLoadPromise: Promise<boolean> | null = null
@@ -54,20 +58,6 @@ export async function insertOoxmlIntoWord(ooxml: string): Promise<void> {
 // can't be resized without shrinking the document view. The Dialog API is Office's
 // sanctioned way to open a larger, separate window from an Add-in.
 
-const DIALOG_QUERY_FLAG = 'dendrographDialog'
-
-export interface EditorState {
-  input: string
-  adjustments: Record<string, { dx: number; dy: number }>
-  arrowAdjustments: Record<string, { dx: number; dy: number }>
-  aspectScale: { x: number; y: number }
-  branchWidthPt: number
-}
-
-export function isDialogWindow(): boolean {
-  return new URLSearchParams(window.location.search).get(DIALOG_QUERY_FLAG) === '1'
-}
-
 function parseMessage(raw: string): Record<string, unknown> | null {
   try {
     return JSON.parse(raw)
@@ -82,8 +72,7 @@ function parseMessage(raw: string): Record<string, unknown> | null {
  *  "apply" result needs to travel back via postMessage. */
 export function openEditorDialog(state: EditorState, onApply: (state: EditorState) => void): void {
   if (!window.Office) return
-  const encodedState = encodeURIComponent(JSON.stringify(state))
-  const url = `${window.location.origin}${window.location.pathname}?${DIALOG_QUERY_FLAG}=1&state=${encodedState}`
+  const url = buildDialogUrl(state)
 
   // A normal-sized window, not a maximized one -- the user can resize it themselves
   // if they want more room (it's a real, independently resizable OS window).
@@ -108,18 +97,6 @@ export function openEditorDialog(state: EditorState, onApply: (state: EditorStat
       }
     })
   })
-}
-
-/** Called from inside the dialog window on mount: reads the state the task pane
- *  encoded into the URL when it opened this dialog. */
-export function readInitialStateFromUrl(): EditorState | null {
-  const raw = new URLSearchParams(window.location.search).get('state')
-  if (!raw) return null
-  try {
-    return JSON.parse(decodeURIComponent(raw)) as EditorState
-  } catch {
-    return null
-  }
 }
 
 /** Called from inside the dialog window when the user is done editing. */

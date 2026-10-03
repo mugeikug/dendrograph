@@ -1,4 +1,5 @@
 import { parseLibrary, serializeLibrary, type TreeLibrary } from '../core/library'
+import { detectVstoHost, openLibraryFileVsto, saveLibraryFileAsVsto, saveLibraryFileToPathVsto } from '../office/vstoBridge'
 
 export interface LibraryFileHandle {
   name: string
@@ -31,6 +32,15 @@ function handleFromFileHandle(fileHandle: FileSystemFileHandle): LibraryFileHand
   }
 }
 
+function handleFromVstoPath(path: string, name: string): LibraryFileHandle {
+  return {
+    name,
+    async save(library) {
+      await saveLibraryFileToPathVsto(path, serializeLibrary(library))
+    },
+  }
+}
+
 const PICKER_TYPES: FilePickerAcceptType[] = [
   { description: 'Dendrograph リスト', accept: { 'application/json': ['.json'] } },
 ]
@@ -40,6 +50,13 @@ const PICKER_TYPES: FilePickerAcceptType[] = [
  *  falls back to a classic `<input type=file>` + forced download for saving otherwise.
  *  Returns null if the user cancels the picker. */
 export async function openLibraryFile(): Promise<{ library: TreeLibrary; handle: LibraryFileHandle } | null> {
+  if (detectVstoHost()) {
+    const result = await openLibraryFileVsto()
+    if (!result) return null
+    const library = parseLibrary(result.text)
+    return { library, handle: handleFromVstoPath(result.path, result.name) }
+  }
+
   if (window.showOpenFilePicker) {
     try {
       const [fileHandle] = await window.showOpenFilePicker({ types: PICKER_TYPES })
@@ -79,6 +96,12 @@ export async function saveLibraryAsNewFile(
   library: TreeLibrary,
   suggestedName = 'dendrograph-list.json',
 ): Promise<LibraryFileHandle | null> {
+  if (detectVstoHost()) {
+    const result = await saveLibraryFileAsVsto(serializeLibrary(library), suggestedName)
+    if (!result) return null
+    return handleFromVstoPath(result.path, result.name)
+  }
+
   if (window.showSaveFilePicker) {
     try {
       const fileHandle = await window.showSaveFilePicker({ suggestedName, types: PICKER_TYPES })
