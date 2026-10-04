@@ -1,4 +1,4 @@
-import { buildDialogUrl, type EditorState } from './dialogState'
+import { buildDialogUrl, readDialogSize, type EditorState } from './dialogState'
 
 export { isDialogWindow, readInitialStateFromUrl, type EditorState } from './dialogState'
 
@@ -66,6 +66,24 @@ function parseMessage(raw: string): Record<string, unknown> | null {
   }
 }
 
+// displayDialogAsync only accepts height/width as a percentage of the current display, not
+// pixels, so a remembered pixel size (saved by the dialog page itself via dialogState.ts's
+// saveDialogSize) has to be converted on the way back in. This is necessarily approximate
+// (percentage rounding, and the dialog may reopen on a different monitor/DPI than it was
+// resized on), but gets close enough to feel like "it remembered."
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(20, Math.round(value)))
+}
+
+function dialogSizeOptions(): { height: number; width: number } {
+  const saved = readDialogSize()
+  if (!saved || !window.screen.width || !window.screen.height) return { height: 70, width: 60 }
+  return {
+    width: clampPercent((saved.width / window.screen.width) * 100),
+    height: clampPercent((saved.height / window.screen.height) * 100),
+  }
+}
+
 /** Called from the task pane: opens the popout editor with the current state encoded
  *  directly in the dialog's URL. This avoids a parent<->dialog "ready/init" handshake
  *  (and its message-timing edge cases) entirely for the initial state; only the final
@@ -75,8 +93,10 @@ export function openEditorDialog(state: EditorState, onApply: (state: EditorStat
   const url = buildDialogUrl(state)
 
   // A normal-sized window, not a maximized one -- the user can resize it themselves
-  // if they want more room (it's a real, independently resizable OS window).
-  window.Office.context.ui.displayDialogAsync(url, { height: 70, width: 60, promptBeforeOpen: false }, (asyncResult) => {
+  // if they want more room (it's a real, independently resizable OS window). Reopens at
+  // whatever size it was last resized to, approximated from pixels to a screen percentage.
+  const { height, width } = dialogSizeOptions()
+  window.Office.context.ui.displayDialogAsync(url, { height, width, promptBeforeOpen: false }, (asyncResult) => {
     if (asyncResult.status === window.Office!.AsyncResultStatus.Failed) {
       console.error('ダイアログを開けませんでした', asyncResult.error)
       return

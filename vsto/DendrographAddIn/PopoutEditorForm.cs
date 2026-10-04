@@ -28,11 +28,17 @@ namespace DendrographAddIn
             _onApply = onApply;
 
             Text = "Dendrograph - 編集ウィンドウ";
-            Width = 1100;
-            Height = 850;
+            Width = Properties.Settings.Default.PopoutWidth;
+            Height = Properties.Settings.Default.PopoutHeight;
 
             Controls.Add(_webView);
             Load += async (sender, e) => await InitializeAsync();
+            FormClosing += (sender, e) =>
+            {
+                Properties.Settings.Default.PopoutWidth = Width;
+                Properties.Settings.Default.PopoutHeight = Height;
+                Properties.Settings.Default.Save();
+            };
         }
 
         private async Task InitializeAsync()

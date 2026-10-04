@@ -34,3 +34,30 @@ export function readInitialStateFromUrl(): EditorState | null {
     return null
   }
 }
+
+// --- Popout window size memory (Office.js edition only; the VSTO edition's popout is a
+// native WinForms window and remembers its size via .NET user settings instead). ---
+
+const DIALOG_SIZE_KEY = 'dendrograph-dialog-size'
+
+export function saveDialogSize(width: number, height: number): void {
+  try {
+    localStorage.setItem(DIALOG_SIZE_KEY, JSON.stringify({ width, height }))
+  } catch {
+    // localStorage unavailable (e.g. private browsing) -- not worth remembering the size for.
+  }
+}
+
+export function readDialogSize(): { width: number; height: number } | null {
+  try {
+    const raw = localStorage.getItem(DIALOG_SIZE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { width?: unknown; height?: unknown }
+    if (typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+      return { width: parsed.width, height: parsed.height }
+    }
+    return null
+  } catch {
+    return null
+  }
+}

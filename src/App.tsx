@@ -12,7 +12,7 @@ import { layoutToOoxml } from './export/ooxml'
 import { treeToForestCode } from './export/forest'
 import { openLibraryFile, saveLibraryAsNewFile, type LibraryFileHandle } from './export/libraryFile'
 import { applyAndCloseDialog, detectWordHost, insertOoxmlIntoWord as insertOoxmlIntoWordOfficeJs, openEditorDialog } from './office/officeBridge'
-import { isDialogWindow, readInitialStateFromUrl } from './office/dialogState'
+import { isDialogWindow, readInitialStateFromUrl, saveDialogSize } from './office/dialogState'
 import {
   applyAndCloseEditorWindow,
   detectVstoHost,
@@ -61,6 +61,24 @@ function App() {
       return
     }
     detectWordHost().then((isWord) => setHostKind(isWord ? 'officejs' : 'browser'))
+  }, [])
+
+  useEffect(() => {
+    // Only the Office.js popout needs this: it's a real browser window the user can resize,
+    // and remembering that size means converting pixels to a displayDialogAsync percentage on
+    // next open (see officeBridge.ts). The VSTO popout is a native WinForms window that
+    // remembers its own size via .NET user settings instead.
+    if (!isDialog) return
+    let timeoutId: number | undefined
+    const onResize = () => {
+      window.clearTimeout(timeoutId)
+      timeoutId = window.setTimeout(() => saveDialogSize(window.innerWidth, window.innerHeight), 400)
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.clearTimeout(timeoutId)
+    }
   }, [])
 
   const { tree, layout, options, lineStyles, error } = useMemo(() => {
@@ -234,17 +252,22 @@ function App() {
     }
   }
 
-  const handleSaveLibrary = async () => {
+  const handleOverwriteSave = async () => {
+    if (!fileHandle) return
     try {
-      if (fileHandle) {
-        await fileHandle.save(library)
-        setLibraryStatus(`${fileHandle.name} に保存しました。`)
-      } else {
-        const handle = await saveLibraryAsNewFile(library)
-        if (handle) {
-          setFileHandle(handle)
-          setLibraryStatus(`${handle.name} に保存しました。`)
-        }
+      await fileHandle.save(library)
+      setLibraryStatus(`${fileHandle.name} に上書き保存しました。`)
+    } catch (e) {
+      setLibraryStatus(`保存に失敗しました: ${String(e)}`)
+    }
+  }
+
+  const handleSaveLibraryAs = async () => {
+    try {
+      const handle = await saveLibraryAsNewFile(library)
+      if (handle) {
+        setFileHandle(handle)
+        setLibraryStatus(`${handle.name} に保存しました。`)
       }
     } catch (e) {
       setLibraryStatus(`保存に失敗しました: ${String(e)}`)
@@ -292,8 +315,11 @@ function App() {
                 <button type="button" onClick={handleOpenLibrary}>
                   リストを開く
                 </button>
-                <button type="button" onClick={handleSaveLibrary}>
-                  リストを保存
+                <button type="button" onClick={handleOverwriteSave} disabled={!fileHandle}>
+                  上書き保存
+                </button>
+                <button type="button" onClick={handleSaveLibraryAs}>
+                  名前を付けて保存
                 </button>
               </div>
               <ul id="entry-list">

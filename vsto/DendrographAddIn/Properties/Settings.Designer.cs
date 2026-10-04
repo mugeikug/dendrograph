@@ -22,5 +22,29 @@ namespace DendrographAddIn.Properties {
                 return defaultInstance;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1100")]
+        public int PopoutWidth {
+            get {
+                return ((int)(this["PopoutWidth"]));
+            }
+            set {
+                this["PopoutWidth"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("850")]
+        public int PopoutHeight {
+            get {
+                return ((int)(this["PopoutHeight"]));
+            }
+            set {
+                this["PopoutHeight"] = value;
+            }
+        }
     }
 }
