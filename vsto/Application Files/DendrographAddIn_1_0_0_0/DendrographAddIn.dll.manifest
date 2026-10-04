@@ -147,14 +147,14 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="DendrographAddIn.dll" size="29184">
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="DendrographAddIn.dll" size="30720">
       <assemblyIdentity name="DendrographAddIn" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>l6XLHNXus/2D2ZA8KcfyfOeqUL8vcKknF3Z3j/ZD6x0=</dsig:DigestValue>
+        <dsig:DigestValue>vAusAHpIpW4WirZTA6IMAfgED/lAuhVnboLMDXzFSuM=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>
@@ -350,6 +350,15 @@
       <dsig:DigestValue>zS8H5H6Y5SRyvXRJEu3J6eZFtUT15hLi84+Jt6yx4GQ=</dsig:DigestValue>
     </hash>
   </file>
+  <file name="WebAppContent\assets\index-BebUqpny.js" size="1623911">
+    <hash>
+      <dsig:Transforms>
+        <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+      </dsig:Transforms>
+      <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+      <dsig:DigestValue>i7RDW4pP3j8GVEZ5JZe60tO2ymIRIMY8pqeRElGMdKk=</dsig:DigestValue>
+    </hash>
+  </file>
   <file name="WebAppContent\assets\index-Cq99bb6B.js" size="1622885">
     <hash>
       <dsig:Transforms>
@@ -404,40 +413,49 @@
       <dsig:DigestValue>tF+lBhlc/N70BrqfDHezbdwafCJAQJJuxwq8L96nuTo=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="WebAppContent\icons\icon-16.png" size="136">
+  <file name="WebAppContent\icons\icon-16.png" size="449">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>q+Sw5qy/Hgkfq8HM7h08eSW37tkvJXoHMcHP2sY25T4=</dsig:DigestValue>
+      <dsig:DigestValue>Nh0KrRUi4OrnqEbkLo13TlAvrIAkbueXoZPLOF5G6ew=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="WebAppContent\icons\icon-32.png" size="158">
+  <file name="WebAppContent\icons\icon-32.png" size="876">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>uAApBaJhtV5ePBjZzc/7LDnJgs0eJSCESV4+mv1H2Rc=</dsig:DigestValue>
+      <dsig:DigestValue>SS2oN7gzyhn6nasj7zKAx6cOcZiWgVw3EPUF0Xm/v1I=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="WebAppContent\icons\icon-64.png" size="246">
+  <file name="WebAppContent\icons\icon-64.png" size="1791">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>uX2+nAqCzSnxwBFczuXVaHbspBW43BX2UZo9FXqo+l0=</dsig:DigestValue>
+      <dsig:DigestValue>yjZsHzBD5Ur6Gx567/yhk018R+G6I2JxiodCgrm2B8I=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="WebAppContent\icons\icon-80.png" size="300">
+  <file name="WebAppContent\icons\icon-80.png" size="2147">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>dzQpDX+5dgimc1qT7vMtx6FqGgPbQ7CktGgt5Jnzf/c=</dsig:DigestValue>
+      <dsig:DigestValue>hTmflj4IvLi0vj9jgBAO4LN22rgSxgH9DFQC1lc/XyA=</dsig:DigestValue>
+    </hash>
+  </file>
+  <file name="WebAppContent\icons\icon-source.svg" size="843">
+    <hash>
+      <dsig:Transforms>
+        <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+      </dsig:Transforms>
+      <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+      <dsig:DigestValue>MY3vCBWLQpF/DEDGnKPtexxywhM4uAHo2kWYKdLBLW0=</dsig:DigestValue>
     </hash>
   </file>
   <file name="WebAppContent\index.html" size="461">
@@ -446,16 +464,16 @@
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>vAiqGepoq7uSJ0RsxaSmmu/sDDPR32IYmvCt5AiXzec=</dsig:DigestValue>
+      <dsig:DigestValue>lVwKfk9eZSmRVpUEhrj6Ms+T7f1ic51r6DWTTqpo5rw=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="WebAppContent\install-guide.html" size="16730">
+  <file name="WebAppContent\install-guide.html" size="22894">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>CvDZE2v350N1mFOysx6dRc8djQmr4W7AVNHmxi4u+T0=</dsig:DigestValue>
+      <dsig:DigestValue>i1zdutH+rSHnPvto30FA5+wRb+rNHXD/jued040CCv4=</dsig:DigestValue>
     </hash>
   </file>
   <file name="WebAppContent\notation-guide.html" size="18419">
@@ -488,4 +506,4 @@
       </vstov4:customizations>
     </vstav3:application>
   </vstav3:addIn>
-<publisherIdentity name="CN=DESKTOP-O1G0F5M\maeza" issuerKeyHash="1a678725d0f6d8a9f66296dcbeaf1a5fbea93960" /><Signature Id="StrongNameSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>M33MkGYJJk+tWXhv7+iZxmcw3QpRCVBnfh9XstMXUhg=</DigestValue></Reference></SignedInfo><SignatureValue>w4m0VR8Lat0PaBUCrZep6jHojLMWCfOU6srsgOwJ6LPTpk62gUm2WDCF3UQaKDRMIVJwZMWda319mpcv1b75XJe1tY3wdSOPsoVrgyBvqtMrIDvhE8P6An7m2lmw/oG22MqiLz3os8d4PxnKqdQYqJl3N6qNMkEKKT5nHCc72Vs=</SignatureValue><KeyInfo Id="StrongNameKeyInfo"><KeyValue><RSAKeyValue><Modulus>9gkYIvbqVe9rMIf7AKl2peCkMhXFsmnYNudjwHfdjsx5ZfD/JpCcpt63uVL51kDotIJXLBykwkaYoXo1Mlh7QMmq9qcTwYCdarhMytOLmSY0VNu89iEcUYNVzXnBWqR6zz9VWJfC6gEfQ/vU96kPBZvkrcCAjBZwa7CM6SPqwBk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><msrel:RelData xmlns:msrel="http://schemas.microsoft.com/windows/rel/2005/reldata"><r:license xmlns:r="urn:mpeg:mpeg21:2003:01-REL-R-NS" xmlns:as="http://schemas.microsoft.com/windows/pki/2005/Authenticode"><r:grant><as:ManifestInformation Hash="185217d3b2571f7e675009510add3067c699e8ef6f7859ad4f26096690cc7d33" Description="" Url=""><as:assemblyIdentity name="DendrographAddIn.dll" version="1.0.0.0" publicKeyToken="e0abdaf3a5692b3b" language="neutral" processorArchitecture="msil" type="win32" /></as:ManifestInformation><as:SignedBy /><as:AuthenticodePublisher><as:X509SubjectName>CN=DESKTOP-O1G0F5M\maeza</as:X509SubjectName></as:AuthenticodePublisher></r:grant><r:issuer><Signature Id="AuthenticodeSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>p9stHKIVT+afhNVEkzk7iEDCQo3qjNdf6v95dKdGB7A=</DigestValue></Reference></SignedInfo><SignatureValue>QgY/pp87aq+VpUCMETUQcxNAkNbT8l6zvqHf8NfkHheyPf8k46eL5tdgX8I+KDeV0p9tH6GqlwvMWGfAQY/FQSwZprH6f93Sdp1AdL9XdZLd/wIBdCc1CypP+4qSOMI5Rr7ECYZMoKjlu2S3/iq2K9zcfKvHW24svteYDUyC64E=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>9gkYIvbqVe9rMIf7AKl2peCkMhXFsmnYNudjwHfdjsx5ZfD/JpCcpt63uVL51kDotIJXLBykwkaYoXo1Mlh7QMmq9qcTwYCdarhMytOLmSY0VNu89iEcUYNVzXnBWqR6zz9VWJfC6gEfQ/vU96kPBZvkrcCAjBZwa7CM6SPqwBk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIB7TCCAVagAwIBAgIQTv+Ad8kji41EN2Q1yChcFTANBgkqhkiG9w0BAQsFADA1MTMwMQYDVQQDHioARABFAFMASwBUAE8AUAAtAE8AMQBHADAARgA1AE0AXABtAGEAZQB6AGEwHhcNMjYxMDAzMTg1NzA1WhcNMjcxMDA0MDA1NzA1WjA1MTMwMQYDVQQDHioARABFAFMASwBUAE8AUAAtAE8AMQBHADAARgA1AE0AXABtAGEAZQB6AGEwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAPYJGCL26lXvazCH+wCpdqXgpDIVxbJp2DbnY8B33Y7MeWXw/yaQnKbet7lS+dZA6LSCVywcpMJGmKF6NTJYe0DJqvanE8GAnWq4TMrTi5kmNFTbvPYhHFGDVc15wVqkes8/VViXwuoBH0P71PepDwWb5K3AgIwWcGuwjOkj6sAZAgMBAAEwDQYJKoZIhvcNAQELBQADgYEADWT8sJgjINDjksl069sYosrGbkNhq5+6WdQLQt9dF1iVOWlH/dFwyOzIUynXqygAnTjPrXVH2/YGT+ZhitDXEeG/gbxVWWgNTL5U14AKuipX1dlqc6xSh+S4/WZf3OtkINeYAIdT93IQjg4MgBLXljNXGfBJt1hBUqDHRO2LN0c=</X509Certificate></X509Data></KeyInfo></Signature></r:issuer></r:license></msrel:RelData></KeyInfo></Signature></asmv1:assembly>
+<publisherIdentity name="CN=DESKTOP-O1G0F5M\maeza" issuerKeyHash="1a678725d0f6d8a9f66296dcbeaf1a5fbea93960" /><Signature Id="StrongNameSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>LnCRf31aZnQnMUw277A0IAto1ay+lm+6Xohzk4X+7AE=</DigestValue></Reference></SignedInfo><SignatureValue>XSQWMb7V8oRh8QCC5JMDsBNyx5m9qZb8kLMnlI1r66pHxpvMvfVA7FMU3XgG9+RdEtQMrwTnDT6UOY0sUyMW/dvtRs4rorviDvx90/ASc5NMxCVovidJgX6gIBiiu7x9qR6Y+ezni2zn7oTklrsG3QBVadfZE+A6pZQeXzrV8qQ=</SignatureValue><KeyInfo Id="StrongNameKeyInfo"><KeyValue><RSAKeyValue><Modulus>9gkYIvbqVe9rMIf7AKl2peCkMhXFsmnYNudjwHfdjsx5ZfD/JpCcpt63uVL51kDotIJXLBykwkaYoXo1Mlh7QMmq9qcTwYCdarhMytOLmSY0VNu89iEcUYNVzXnBWqR6zz9VWJfC6gEfQ/vU96kPBZvkrcCAjBZwa7CM6SPqwBk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><msrel:RelData xmlns:msrel="http://schemas.microsoft.com/windows/rel/2005/reldata"><r:license xmlns:r="urn:mpeg:mpeg21:2003:01-REL-R-NS" xmlns:as="http://schemas.microsoft.com/windows/pki/2005/Authenticode"><r:grant><as:ManifestInformation Hash="01ecfe859373885eba6f96beacd5680b2034b0ef364c312774665a7d7f91702e" Description="" Url=""><as:assemblyIdentity name="DendrographAddIn.dll" version="1.0.0.0" publicKeyToken="e0abdaf3a5692b3b" language="neutral" processorArchitecture="msil" type="win32" /></as:ManifestInformation><as:SignedBy /><as:AuthenticodePublisher><as:X509SubjectName>CN=DESKTOP-O1G0F5M\maeza</as:X509SubjectName></as:AuthenticodePublisher></r:grant><r:issuer><Signature Id="AuthenticodeSignature" xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha256" /><Reference URI=""><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" /><DigestValue>IpOEv0h5/MHwTNqfHFWEu9iCJ7haooAJjEyIuyaXOv8=</DigestValue></Reference></SignedInfo><SignatureValue>3tZrKLGNcgi/PH7+Ox1lZ8IpvaqT0z7NuQij9lmQ3XEOS+Fav62AkBWIQq5Da2+0b7akPUgWyJ6fiWZUvojY//0iB1k+21vfYEvPXnUzqJQggjDa2CHKfGp2P3ovWNEhL3BTBGXeXG+a8g9tDtcZ6gCNEqrpOGOF6hZXqBJ+BxI=</SignatureValue><KeyInfo><KeyValue><RSAKeyValue><Modulus>9gkYIvbqVe9rMIf7AKl2peCkMhXFsmnYNudjwHfdjsx5ZfD/JpCcpt63uVL51kDotIJXLBykwkaYoXo1Mlh7QMmq9qcTwYCdarhMytOLmSY0VNu89iEcUYNVzXnBWqR6zz9VWJfC6gEfQ/vU96kPBZvkrcCAjBZwa7CM6SPqwBk=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue></KeyValue><X509Data><X509Certificate>MIIB7TCCAVagAwIBAgIQTv+Ad8kji41EN2Q1yChcFTANBgkqhkiG9w0BAQsFADA1MTMwMQYDVQQDHioARABFAFMASwBUAE8AUAAtAE8AMQBHADAARgA1AE0AXABtAGEAZQB6AGEwHhcNMjYxMDAzMTg1NzA1WhcNMjcxMDA0MDA1NzA1WjA1MTMwMQYDVQQDHioARABFAFMASwBUAE8AUAAtAE8AMQBHADAARgA1AE0AXABtAGEAZQB6AGEwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAPYJGCL26lXvazCH+wCpdqXgpDIVxbJp2DbnY8B33Y7MeWXw/yaQnKbet7lS+dZA6LSCVywcpMJGmKF6NTJYe0DJqvanE8GAnWq4TMrTi5kmNFTbvPYhHFGDVc15wVqkes8/VViXwuoBH0P71PepDwWb5K3AgIwWcGuwjOkj6sAZAgMBAAEwDQYJKoZIhvcNAQELBQADgYEADWT8sJgjINDjksl069sYosrGbkNhq5+6WdQLQt9dF1iVOWlH/dFwyOzIUynXqygAnTjPrXVH2/YGT+ZhitDXEeG/gbxVWWgNTL5U14AKuipX1dlqc6xSh+S4/WZf3OtkINeYAIdT93IQjg4MgBLXljNXGfBJt1hBUqDHRO2LN0c=</X509Certificate></X509Data></KeyInfo></Signature></r:issuer></r:license></msrel:RelData></KeyInfo></Signature></asmv1:assembly>
